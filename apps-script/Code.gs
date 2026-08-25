@@ -233,20 +233,48 @@ function doPost(e) {
     let updatedRowIndex = -1;
     try {
       if (isUpdate && allValues.length > 1) {
-        for (let r = 1; r < allValues.length; r++) {
-          for (let c = 0; c < allValues[r].length; c++) {
-            if (String(allValues[r][c]).trim().toLowerCase() === id.toLowerCase()) {
-              updatedRowIndex = r + 1; // 1-based index
+        const targetId = String(id).trim().toLowerCase();
+        
+        // Find which column is the ID column
+        let idColIndex = -1;
+        for (let c = 0; c < headerRow.length; c++) {
+          const h = String(headerRow[c]).trim().toLowerCase().replace(/[\s_\-]+/g, ' ');
+          if (h === 'id' || h === 'donor id' || h === 'donor_id' || h === 'donorid') {
+            idColIndex = c;
+            break;
+          }
+        }
+
+        // 1. Direct ID column check
+        if (idColIndex !== -1) {
+          for (let r = 1; r < allValues.length; r++) {
+            const cellVal = String(allValues[r][idColIndex] || '').trim().toLowerCase();
+            if (cellVal === targetId) {
+              updatedRowIndex = r + 1; // 1-indexed row in Google Sheet
               break;
             }
           }
-          if (updatedRowIndex !== -1) break;
+        }
+
+        // 2. Full row scan fallback
+        if (updatedRowIndex === -1) {
+          for (let r = 1; r < allValues.length; r++) {
+            for (let c = 0; c < allValues[r].length; c++) {
+              if (String(allValues[r][c] || '').trim().toLowerCase() === targetId) {
+                updatedRowIndex = r + 1;
+                break;
+              }
+            }
+            if (updatedRowIndex !== -1) break;
+          }
         }
       }
 
       if (updatedRowIndex > 0) {
+        // Update the existing row in Google Sheets
         sheet.getRange(updatedRowIndex, 1, 1, formattedRow.length).setValues([formattedRow]);
       } else {
+        // Append new row
         sheet.appendRow(formattedRow);
       }
     } finally {
