@@ -13,7 +13,7 @@ import {
 import { useOperations } from '../../context/OperationsContext';
 import LogVoluntaryDonationModal from './LogVoluntaryDonationModal';
 import EditVoluntaryDonationModal from './EditVoluntaryDonationModal';
-import { formatShortDate } from '../../utils/donor';
+import { formatShortDate, formatDonorName } from '../../utils/donor';
 
 export default function VoluntaryDonationsTab() {
   const { voluntaryLogs } = useOperations();
@@ -123,7 +123,7 @@ export default function VoluntaryDonationsTab() {
                   return (
                     <tr key={log.id} className="transition-colors hover:bg-slate-50/50">
                       <td className="px-4 py-3">
-                        <p className="font-bold text-slate-900">{log.donorName}</p>
+                        <p className="font-bold text-slate-900">{formatDonorName(log.donorName)}</p>
                         <p className="text-xs text-slate-400">{log.donorId}</p>
                       </td>
                       <td className="px-4 py-3">

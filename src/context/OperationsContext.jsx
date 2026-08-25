@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { useDonors } from './DonorContext';
-import { API_URL, ADMIN_PASSCODE } from '../config';
+import { API_URL } from '../config';
 import {
   normalizeEmergencyCase,
   normalizeCamp,
@@ -163,7 +163,8 @@ export function OperationsProvider({ children }) {
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
           action,
-          auth_token: authToken || ADMIN_PASSCODE,
+          sessionToken: authToken,
+          auth_token: authToken,
           ...payload,
         }),
       });

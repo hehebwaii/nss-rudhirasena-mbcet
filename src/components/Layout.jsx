@@ -8,13 +8,18 @@ export default function Layout({ children, activeTab, onTabChange }) {
         {children}
       </main>
       <footer className="border-t border-slate-200 py-6 text-center text-sm text-slate-500">
-        <span className="inline-flex items-center gap-2">
-          <span
-            aria-hidden="true"
-            className="h-1.5 w-1.5 rounded-full bg-red-600"
-          />
-          NSS Rudhirasena · Blood Donor Directory
-        </span>
+        <div className="flex flex-col items-center justify-center gap-1">
+          <span className="inline-flex items-center gap-2 font-medium text-slate-600">
+            <span
+              aria-hidden="true"
+              className="h-1.5 w-1.5 rounded-full bg-red-600"
+            />
+            NSS Rudhirasena · Blood Donor Directory
+          </span>
+          <p className="text-xs text-slate-400 font-medium">
+            Developed by NSS MBCET Units 230 & 706
+          </p>
+        </div>
       </footer>
     </div>
   );

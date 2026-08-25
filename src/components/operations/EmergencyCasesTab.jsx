@@ -55,21 +55,25 @@ export default function EmergencyCasesTab() {
     <div className="space-y-6">
       {/* Top Banner Stats */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="flex items-center justify-between rounded-2xl border border-red-200 bg-red-50/50 p-4 shadow-card">
+        <div className="hover-card-lift flex items-center justify-between rounded-2xl border border-red-200 bg-red-50/50 p-4 shadow-card">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-red-600">
+            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-red-600">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600" />
+              </span>
               Critical Urgency
             </p>
             <p className="tnum mt-1 text-2xl font-black text-red-900">
               {stats.criticalCount}
             </p>
           </div>
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100 text-red-700">
+          <span className="animate-pulse-subtle flex h-10 w-10 items-center justify-center rounded-xl bg-red-100 text-red-700 shadow-xs">
             <AlertCircle className="h-5 w-5" />
           </span>
         </div>
 
-        <div className="flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50/50 p-4 shadow-card">
+        <div className="hover-card-lift flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50/50 p-4 shadow-card">
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-amber-700">
               Open Requests
@@ -78,12 +82,12 @@ export default function EmergencyCasesTab() {
               {stats.openCount}
             </p>
           </div>
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-800">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-800 shadow-xs">
             <Clock className="h-5 w-5" />
           </span>
         </div>
 
-        <div className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-card">
+        <div className="hover-card-lift flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-card">
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">
               In Progress / Assigned
@@ -92,7 +96,7 @@ export default function EmergencyCasesTab() {
               {stats.inProgressCount}
             </p>
           </div>
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800 shadow-xs">
             <UserCheck className="h-5 w-5" />
           </span>
         </div>
@@ -108,7 +112,7 @@ export default function EmergencyCasesTab() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search patient, hospital, or blood group..."
-              className="w-full rounded-xl border border-slate-200 bg-white py-2 pr-3 pl-9 text-xs text-slate-900 outline-none placeholder:text-slate-400 focus:border-red-500 focus:ring-2 focus:ring-red-100"
+              className="w-full rounded-xl border border-slate-200 bg-white py-2 pr-3 pl-9 text-xs text-slate-900 outline-none placeholder:text-slate-400 focus:border-red-500 focus:ring-2 focus:ring-red-100 transition-colors"
             />
           </div>
 
@@ -118,9 +122,9 @@ export default function EmergencyCasesTab() {
                 key={status}
                 type="button"
                 onClick={() => setStatusFilter(status)}
-                className={`cursor-pointer rounded-lg px-2.5 py-1 font-semibold transition-colors ${
+                className={`cursor-pointer rounded-lg px-2.5 py-1 font-semibold transition-all active:scale-95 ${
                   statusFilter === status
-                    ? 'bg-white text-slate-900 shadow-xs'
+                    ? 'bg-white text-red-700 shadow-xs ring-1 ring-slate-900/5'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -133,7 +137,7 @@ export default function EmergencyCasesTab() {
         <button
           type="button"
           onClick={() => setIsNewCaseOpen(true)}
-          className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-red-700 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors hover:bg-red-800 active:scale-95"
+          className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-red-700 px-4 py-2 text-xs font-bold text-white shadow-xs transition-all hover:bg-red-800 active:scale-95"
         >
           <Plus className="h-4 w-4" />
           New Emergency Request
@@ -157,7 +161,7 @@ export default function EmergencyCasesTab() {
             return (
               <div
                 key={c.id}
-                className={`flex flex-col justify-between rounded-2xl border bg-white p-5 shadow-card transition-shadow hover:shadow-raised ${
+                className={`hover-card-lift flex flex-col justify-between rounded-2xl border bg-white p-5 shadow-card ${
                   isCritical && !isFulfilled
                     ? 'border-red-300 ring-1 ring-red-100'
                     : 'border-slate-200/80'
@@ -166,7 +170,7 @@ export default function EmergencyCasesTab() {
                 <div>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-700 text-sm font-bold text-white shadow-xs">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-700 text-sm font-bold text-white shadow-xs transition-transform hover:scale-105">
                         {c.bloodGroup}
                       </span>
                       <div>
@@ -177,7 +181,7 @@ export default function EmergencyCasesTab() {
 
                     <div className="flex items-center gap-1.5">
                       <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
                           c.urgency === 'Critical'
                             ? 'bg-red-100 text-red-700'
                             : c.urgency === 'Urgent'
@@ -185,6 +189,9 @@ export default function EmergencyCasesTab() {
                               : 'bg-blue-100 text-blue-800'
                         }`}
                       >
+                        {isCritical && !isFulfilled && (
+                          <span className="h-1.5 w-1.5 rounded-full bg-red-600 animate-pulse" />
+                        )}
                         {c.urgency}
                       </span>
                       <select

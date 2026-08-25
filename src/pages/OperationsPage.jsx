@@ -25,26 +25,29 @@ export default function OperationsPage() {
   const [isSpotRegisterOpen, setIsSpotRegisterOpen] = useState(false);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="w-full space-y-6">
       {/* Operations Page Header */}
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-700 text-white shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="animate-pulse-subtle flex h-10 w-10 items-center justify-center rounded-2xl bg-red-700 text-white shadow-md transition-transform hover:scale-105">
               <Activity className="h-5 w-5" />
             </div>
-            <h1 className="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
-              Donation Operations Center
-            </h1>
+            <div>
+              <h1 className="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+                Donation Operations Center
+              </h1>
+            </div>
           </div>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm font-medium text-slate-500">
             Emergency request fulfillment, voluntary donation logging, and camp drive rosters.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           {isAuthenticated ? (
-            <span className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-1.5 text-xs font-bold text-emerald-800">
+            <span className="hover-card-lift inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-1.5 text-xs font-bold text-emerald-800 shadow-xs">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               <ShieldCheck className="h-4 w-4 text-emerald-600" />
               Authorized Coordinator Access
             </span>
@@ -52,7 +55,7 @@ export default function OperationsPage() {
             <button
               type="button"
               onClick={() => requireAuth(() => {})}
-              className="cursor-pointer rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-slate-800"
+              className="cursor-pointer rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white transition-all hover:bg-slate-800 active:scale-95 shadow-xs"
             >
               Unlock Coordinator Mode
             </button>
@@ -60,9 +63,9 @@ export default function OperationsPage() {
         </div>
       </div>
 
-      {/* Sub-tab Navigation */}
-      <div className="mb-6 flex border-b border-slate-200">
-        <nav className="-mb-px flex space-x-6 overflow-x-auto" aria-label="Operations Tabs">
+      {/* Sub-tab Navigation with Animated Pills */}
+      <div className="mb-6 rounded-2xl border border-slate-200/80 bg-slate-100/80 p-1.5 shadow-xs backdrop-blur-xs">
+        <nav className="flex space-x-2 overflow-x-auto" aria-label="Operations Tabs">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -71,16 +74,18 @@ export default function OperationsPage() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex cursor-pointer items-center gap-2 border-b-2 py-3 text-sm font-bold whitespace-nowrap transition-colors ${
+                className={`group flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold whitespace-nowrap transition-all duration-200 active:scale-98 ${
                   isActive
-                    ? 'border-red-700 text-red-700'
-                    : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                    ? 'bg-white text-red-700 shadow-sm ring-1 ring-slate-900/5'
+                    : 'text-slate-600 hover:bg-white/60 hover:text-slate-900'
                 }`}
               >
-                <Icon className={`h-4 w-4 ${isActive ? 'text-red-700' : 'text-slate-400'}`} />
-                {tab.label}
+                <Icon className={`h-4 w-4 transition-transform duration-200 group-hover:scale-110 ${isActive ? 'text-red-700' : 'text-slate-400'}`} />
+                <span>{tab.label}</span>
                 {tab.badge && (
-                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-extrabold text-red-800">
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold transition-colors ${
+                    isActive ? 'bg-red-100 text-red-800' : 'bg-slate-200 text-slate-700'
+                  }`}>
                     {tab.badge}
                   </span>
                 )}
@@ -90,12 +95,14 @@ export default function OperationsPage() {
         </nav>
       </div>
 
-      {/* Active Tab Component */}
-      {activeTab === 'cases' && <EmergencyCasesTab />}
-      {activeTab === 'voluntary' && <VoluntaryDonationsTab />}
-      {activeTab === 'camps' && (
-        <CampsTab onRegisterNewDonor={() => setIsSpotRegisterOpen(true)} />
-      )}
+      {/* Active Tab Component with Fade Animation */}
+      <div key={activeTab} className="animate-fade-in">
+        {activeTab === 'cases' && <EmergencyCasesTab />}
+        {activeTab === 'voluntary' && <VoluntaryDonationsTab />}
+        {activeTab === 'camps' && (
+          <CampsTab onRegisterNewDonor={() => setIsSpotRegisterOpen(true)} />
+        )}
+      </div>
 
       {/* On-the-spot Register Modal */}
       <RegisterDonorModal

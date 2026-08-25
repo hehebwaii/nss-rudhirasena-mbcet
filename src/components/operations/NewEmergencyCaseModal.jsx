@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { AlertCircle, AlertTriangle, CheckCircle2, Loader2, Plus } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle2, ClipboardPaste, Loader2, Plus, Sparkles } from 'lucide-react';
 import Modal from '../Modal';
 import { useOperations } from '../../context/OperationsContext';
-import { BLOOD_GROUPS } from '../../utils/donor';
-import { URGENCY_LEVELS } from '../../utils/operations';
+import { BLOOD_GROUPS, formatDonorName } from '../../utils/donor';
+import { URGENCY_LEVELS, parseBroadcastMessage } from '../../utils/operations';
 
 const inputClass =
   'w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 hover:border-slate-400 focus:border-red-500 focus:ring-2 focus:ring-red-100';
@@ -22,6 +22,8 @@ function Field({ id, label, required, children }) {
 
 export default function NewEmergencyCaseModal({ open, onClose }) {
   const { addEmergencyCase } = useOperations();
+  const [showPasteBox, setShowPasteBox] = useState(false);
+  const [pasteText, setPasteText] = useState('');
   const [form, setForm] = useState({
     patientName: '',
     hospital: '',
@@ -40,6 +42,27 @@ export default function NewEmergencyCaseModal({ open, onClose }) {
     setForm((prev) => ({ ...prev, [key]: e.target.value }));
   };
 
+  const handleApplyBroadcast = () => {
+    if (!pasteText.trim()) return;
+    const parsed = parseBroadcastMessage(pasteText);
+    if (parsed) {
+      setForm((prev) => ({
+        ...prev,
+        patientName: parsed.patientName || prev.patientName,
+        hospital: parsed.hospital || prev.hospital,
+        bloodGroup: parsed.bloodGroup || prev.bloodGroup,
+        unitsNeeded: parsed.unitsNeeded || prev.unitsNeeded,
+        urgency: parsed.urgency || prev.urgency,
+        requiredDate: parsed.requiredDate || prev.requiredDate,
+        contactPerson: parsed.contactPerson || prev.contactPerson,
+        notes: parsed.notes || prev.notes,
+      }));
+      setShowPasteBox(false);
+      setPasteText('');
+      setError('');
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.patientName.trim() || !form.hospital.trim()) {
@@ -52,7 +75,7 @@ export default function NewEmergencyCaseModal({ open, onClose }) {
 
     try {
       await addEmergencyCase({
-        patientName: form.patientName.trim(),
+        patientName: formatDonorName(form.patientName.trim()),
         hospital: form.hospital.trim(),
         bloodGroup: form.bloodGroup,
         unitsNeeded: Number(form.unitsNeeded) || 1,
@@ -81,6 +104,8 @@ export default function NewEmergencyCaseModal({ open, onClose }) {
       contactPerson: '',
       notes: '',
     });
+    setShowPasteBox(false);
+    setPasteText('');
     setError('');
     setSuccess(false);
     onClose();
@@ -115,7 +140,48 @@ export default function NewEmergencyCaseModal({ open, onClose }) {
           </div>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} noValidate className="space-y-4">
+        <div className="space-y-4">
+          {/* WhatsApp / KTU Broadcast Message Quick-Parser */}
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                <Sparkles className="h-4 w-4 text-red-600" />
+                KTU NSS Broadcast / WhatsApp Message Auto-Fill
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowPasteBox((prev) => !prev)}
+                className="cursor-pointer text-xs font-bold text-red-700 hover:underline"
+              >
+                {showPasteBox ? 'Hide Paste Box' : '+ Paste Broadcast Text'}
+              </button>
+            </div>
+
+            {showPasteBox && (
+              <div className="mt-3 space-y-2">
+                <textarea
+                  rows={4}
+                  value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)}
+                  placeholder="Paste standard KTU NSS Blood Cell message here..."
+                  className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs text-slate-800 outline-none placeholder:text-slate-400 focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                />
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleApplyBroadcast}
+                    disabled={!pasteText.trim()}
+                    className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-red-700 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-red-800 disabled:opacity-50"
+                  >
+                    <ClipboardPaste className="h-3.5 w-3.5" />
+                    Auto-Fill Form
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <form onSubmit={handleSubmit} noValidate className="space-y-4">
           {error && (
             <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-800">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
@@ -258,6 +324,7 @@ export default function NewEmergencyCaseModal({ open, onClose }) {
             </button>
           </div>
         </form>
+        </div>
       )}
     </Modal>
   );

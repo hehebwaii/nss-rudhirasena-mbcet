@@ -66,7 +66,7 @@ export default function CampsTab({ onRegisterNewDonor }) {
     <div className="space-y-6">
       {/* Top Banner Stats */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="flex items-center justify-between rounded-2xl border border-red-200 bg-red-50/50 p-4 shadow-card">
+        <div className="hover-card-lift flex items-center justify-between rounded-2xl border border-red-200 bg-red-50/50 p-4 shadow-card">
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-red-600">
               Total Units Collected in Camps
@@ -75,12 +75,12 @@ export default function CampsTab({ onRegisterNewDonor }) {
               {stats.totalCollected} Units
             </p>
           </div>
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100 text-red-700">
+          <span className="animate-pulse-subtle flex h-10 w-10 items-center justify-center rounded-xl bg-red-100 text-red-700 shadow-xs">
             <Tent className="h-5 w-5" />
           </span>
         </div>
 
-        <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
+        <div className="hover-card-lift flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
               Upcoming / Active Drives
@@ -89,7 +89,7 @@ export default function CampsTab({ onRegisterNewDonor }) {
               {stats.upcomingCount} Camps
             </p>
           </div>
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700 shadow-xs">
             <Calendar className="h-5 w-5" />
           </span>
         </div>
@@ -97,43 +97,24 @@ export default function CampsTab({ onRegisterNewDonor }) {
 
       {/* Action Bar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 flex-wrap items-center gap-2">
-          <div className="relative min-w-[14rem] flex-1">
-            <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search camp title, venue, blood bank..."
-              className="w-full rounded-xl border border-slate-200 bg-white py-2 pr-3 pl-9 text-xs text-slate-900 outline-none placeholder:text-slate-400 focus:border-red-500 focus:ring-2 focus:ring-red-100"
-            />
-          </div>
-
-          <div className="flex items-center gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1 text-xs">
-            {['All', ...CAMP_STATUS].map((status) => (
-              <button
-                key={status}
-                type="button"
-                onClick={() => setStatusFilter(status)}
-                className={`cursor-pointer rounded-lg px-2.5 py-1 font-semibold transition-colors ${
-                  statusFilter === status
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {status}
-              </button>
-            ))}
-          </div>
+        <div className="relative min-w-[14rem] flex-1 max-w-md">
+          <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search camp by name, venue or partner blood bank..."
+            className="w-full rounded-xl border border-slate-200 bg-white py-2 pr-3 pl-9 text-xs text-slate-900 outline-none placeholder:text-slate-400 focus:border-red-500 focus:ring-2 focus:ring-red-100 transition-colors"
+          />
         </div>
 
         <button
           type="button"
           onClick={() => setIsNewCampOpen(true)}
-          className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-red-700 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors hover:bg-red-800 active:scale-95"
+          className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-red-700 px-4 py-2 text-xs font-bold text-white shadow-xs transition-all hover:bg-red-800 active:scale-95"
         >
           <Plus className="h-4 w-4" />
-          New Donation Camp
+          Schedule New Camp Drive
         </button>
       </div>
 
@@ -151,23 +132,34 @@ export default function CampsTab({ onRegisterNewDonor }) {
             const target = Number(camp.targetUnits) || 50;
             const collected = Number(camp.collectedUnits) || (camp.donorIds ? camp.donorIds.length : 0);
             const percentage = Math.min(100, Math.round((collected / target) * 100));
+            const isOngoing = camp.status === 'Ongoing';
 
             return (
               <div
                 key={camp.id}
-                className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card transition-all hover:shadow-raised"
+                className={`hover-card-lift flex flex-col justify-between rounded-2xl border bg-white p-5 shadow-card ${
+                  isOngoing ? 'border-red-300 ring-1 ring-red-100' : 'border-slate-200/80'
+                }`}
               >
                 <div>
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <h4 className="font-bold text-slate-900">{camp.name}</h4>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-slate-900">{camp.name}</h4>
+                        {isOngoing && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700 animate-pulse">
+                            <span className="h-1.5 w-1.5 rounded-full bg-red-600" />
+                            Live Now
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-slate-400">{camp.id}</p>
                     </div>
 
                     <select
                       value={camp.status}
                       onChange={(e) => updateCamp(camp.id, { status: e.target.value })}
-                      className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-bold text-slate-700 outline-none hover:bg-white"
+                      className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-bold text-slate-700 outline-none hover:bg-white transition-colors"
                     >
                       {CAMP_STATUS.map((st) => (
                         <option key={st} value={st}>
@@ -193,17 +185,17 @@ export default function CampsTab({ onRegisterNewDonor }) {
                     )}
                   </div>
 
-                  {/* Progress Meter */}
+                  {/* Progress Meter with smooth animation */}
                   <div className="mt-4 rounded-xl bg-slate-50 p-3">
-                    <div className="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1">
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1.5">
                       <span>Collection Metric</span>
                       <span className="tnum font-bold text-slate-900">
                         {collected} / {target} units ({percentage}%)
                       </span>
                     </div>
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200/80">
                       <div
-                        className="h-full rounded-full bg-red-600 transition-all duration-300"
+                        className="h-full rounded-full bg-gradient-to-r from-red-600 to-rose-500 transition-all duration-700 ease-out"
                         style={{ width: `${percentage}%` }}
                       />
                     </div>

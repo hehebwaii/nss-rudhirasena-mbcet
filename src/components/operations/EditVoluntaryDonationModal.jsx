@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle2, Edit3, Loader2, Save, Trash2 } from 'lucide-
 import Modal from '../Modal';
 import CertificateUploader from '../CertificateUploader';
 import { useOperations } from '../../context/OperationsContext';
+import { formatDonorName } from '../../utils/donor';
 
 const DONATION_TYPES = ['Whole Blood', 'Platelets', 'Plasma'];
 
@@ -118,7 +119,7 @@ export default function EditVoluntaryDonationModal({ open, donationLog, onClose 
     <Modal
       open={open}
       onClose={onClose}
-      title={`Edit Voluntary Donation · ${donationLog?.donorName || ''}`}
+      title={`Edit Voluntary Donation · ${donationLog?.donorName ? formatDonorName(donationLog.donorName) : ''}`}
       maxWidth="max-w-2xl"
     >
       {success ? (

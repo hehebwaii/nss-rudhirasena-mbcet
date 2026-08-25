@@ -19,7 +19,7 @@ const NAV_ITEMS = [
 ];
 
 export default function Navbar({ activeTab = 'dashboard', onTabChange }) {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const handleSelect = (tabId) => {
@@ -77,6 +77,15 @@ export default function Navbar({ activeTab = 'dashboard', onTabChange }) {
 
           <div className="mx-2 h-4 w-px bg-slate-200" />
 
+          {user && (
+            <div className="mr-1 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="max-w-[140px] truncate" title={user.email}>
+                {user.email}
+              </span>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={logout}
@@ -122,10 +131,16 @@ export default function Navbar({ activeTab = 'dashboard', onTabChange }) {
                 </button>
               );
             })}
+            {user && (
+              <div className="my-1 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="truncate">{user.email}</span>
+              </div>
+            )}
             <button
               type="button"
               onClick={logout}
-              className="mt-2 flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+              className="mt-1 flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-700"
             >
               <LogOut className="h-4 w-4 text-slate-400" />
               Logout

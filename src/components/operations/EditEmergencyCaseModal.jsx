@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle2, Edit3, Loader2, Save, Trash2 } from 'lucide-react';
 import Modal from '../Modal';
 import { useOperations } from '../../context/OperationsContext';
-import { BLOOD_GROUPS } from '../../utils/donor';
+import { BLOOD_GROUPS, formatDonorName } from '../../utils/donor';
 import { CASE_STATUS, URGENCY_LEVELS } from '../../utils/operations';
 
 const inputClass =
@@ -74,7 +74,7 @@ export default function EditEmergencyCaseModal({ open, emergencyCase, onClose, o
 
     try {
       await updateEmergencyCase(emergencyCase.id, {
-        patientName: form.patientName.trim(),
+        patientName: formatDonorName(form.patientName.trim()),
         hospital: form.hospital.trim(),
         bloodGroup: form.bloodGroup,
         unitsNeeded: Number(form.unitsNeeded) || 1,

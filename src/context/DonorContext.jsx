@@ -6,7 +6,7 @@ import {
   useMemo,
   useState,
 } from 'react';
-import { ADMIN_PASSCODE, API_URL } from '../config';
+import { API_URL } from '../config';
 import { normalizeDonor } from '../utils/donor';
 import { useAuth } from './AuthContext';
 
@@ -15,6 +15,7 @@ const DonorContext = createContext(null);
 async function fetchDonors(token) {
   const url = new URL(API_URL);
   if (token) {
+    url.searchParams.set('sessionToken', token);
     url.searchParams.set('key', token);
     url.searchParams.set('client_id', 'nss_web_app');
   }
@@ -40,13 +41,13 @@ async function fetchDonors(token) {
     throw new Error('Unexpected API response format.');
   }
 
-  return rawList.map((donor, idx) => normalizeDonor(donor, idx));
+  return rawList.map((row, idx) => normalizeDonor(row, idx));
 }
 
 export function DonorProvider({ children }) {
-  const { authToken, isAuthenticated } = useAuth();
+  const { isAuthenticated, authToken } = useAuth();
   const [donors, setDonors] = useState([]);
-  const [status, setStatus] = useState('loading');
+  const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
   const [lastUpdated, setLastUpdated] = useState(null);
 
@@ -57,7 +58,7 @@ export function DonorProvider({ children }) {
       setError('');
     }
     try {
-      const data = await fetchDonors(authToken || ADMIN_PASSCODE);
+      const data = await fetchDonors(authToken);
       setDonors(data);
       setLastUpdated(new Date());
       setStatus('success');
@@ -72,7 +73,8 @@ export function DonorProvider({ children }) {
   const addDonor = useCallback(async (payload) => {
     const fullPayload = {
       action: 'register',
-      auth_token: authToken || ADMIN_PASSCODE,
+      sessionToken: authToken,
+      auth_token: authToken,
       ...payload,
     };
 
@@ -100,7 +102,8 @@ export function DonorProvider({ children }) {
   const updateDonor = useCallback(async (donorId, payload) => {
     const fullPayload = {
       action: 'update',
-      auth_token: authToken || ADMIN_PASSCODE,
+      sessionToken: authToken,
+      auth_token: authToken,
       ID: donorId,
       Donor_ID: donorId,
       ...payload,

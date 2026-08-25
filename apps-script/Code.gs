@@ -10,11 +10,10 @@
  */
 
 const SHEET_NAME = 'Donors';
-const ADMIN_API_KEY = 'rudhirasena';
 
 // Rate Limit Config
 const RATE_LIMIT_READ_MAX = 60;   // Max 60 GET requests per minute per client
-const RATE_LIMIT_WRITE_MAX = 15;  // Max 15 POST mutations per minute per client
+const RATE_LIMIT_WRITE_MAX = 25;  // Max 25 POST mutations per minute per client
 const RATE_LIMIT_WINDOW_SEC = 60; // 1 minute sliding window
 const MAX_PAYLOAD_BYTES = 10485760; // 10 MB payload for certificate file uploads
 
@@ -74,17 +73,16 @@ const HEADER_MAP = {
   'phone': 'Contact',
   'mobile': 'Contact',
   'phone number': 'Contact',
+  'mobile number': 'Contact',
   'department': 'Department',
-  'department / year': 'Department',
-  'department_year': 'Department',
-  'departmentyear': 'Department',
   'dept': 'Department',
+  'branch': 'Department',
   'year': 'Year',
   'year of study': 'Year',
   'year_of_study': 'Year',
   'yearofstudy': 'Year',
   'batch': 'Year',
-  'academic year': 'Year',
+  'semester': 'Year',
   'age': 'Age',
   'weight': 'Weight',
   'weight (kg)': 'Weight',
@@ -130,9 +128,15 @@ function doGet(e) {
       });
     }
 
-    // 2. Authentication Check (Allow with token or accept query key)
-    const token = (e && e.parameter && (e.parameter.key || e.parameter.auth || e.parameter.apiKey)) || '';
-    const hasAuth = verifyAuth_(token);
+    // 2. Authentication Check with signed session token
+    const token = (e && e.parameter && (e.parameter.key || e.parameter.auth || e.parameter.apiKey || e.parameter.sessionToken)) || '';
+    if (!verifyAuth_(token)) {
+      return jsonResponse_({
+        status: 'error',
+        error: 'Unauthorized: Valid coordinator authentication required to view donor data.',
+        code: 401
+      });
+    }
 
     const sheet = getSheet_();
     const values = sheet.getDataRange().getValues();
@@ -140,97 +144,109 @@ function doGet(e) {
       return jsonResponse_({ status: 'success', data: [] });
     }
 
-    const rawHeaders = values[0].map(h => String(h).trim());
-    const mappedHeaders = rawHeaders.map(h => {
-      const cleaned = h.toLowerCase().replace(/[\s_\-]+/g, ' ').trim();
-      return HEADER_MAP[cleaned] || h;
-    });
+    const headerRow = values[0];
+    const columnMap = {};
+    for (let c = 0; c < headerRow.length; c++) {
+      const originalHeader = String(headerRow[c]).trim();
+      const cleaned = originalHeader.toLowerCase().replace(/[\s_\-]+/g, ' ');
+      const canonical = HEADER_MAP[cleaned] || originalHeader;
+      columnMap[canonical] = c;
+    }
 
-    const donors = values
-      .slice(1)
-      .filter(row => row.some(cell => cell !== null && cell !== undefined && String(cell).trim() !== ''))
-      .map((row, index) => {
-        const donor = {};
-        
-        rawHeaders.forEach((rawHeader, i) => {
-          const val = cellValue_(row[i]);
-          donor[rawHeader] = val;
-          const canonical = mappedHeaders[i];
-          if (canonical) {
-            donor[canonical] = val;
-          }
-        });
+    const result = [];
+    for (let r = 1; r < values.length; r++) {
+      const row = values[r];
+      if (row.every(cell => cell === '' || cell == null)) {
+        continue;
+      }
 
-        if (!donor['ID']) {
-          donor['ID'] = 'RUD-' + String(index + 1).padStart(3, '0');
+      const getVal = (canonicalKey, fallbackIndex) => {
+        if (columnMap[canonicalKey] !== undefined) {
+          return row[columnMap[canonicalKey]];
         }
-
-        // Normalize Year and Department if combined in Department_Year / Department
-        if (!donor['Year']) {
-          const rawDeptStr = String(donor['Department'] || donor['Department_Year'] || '').trim();
-          const yrMatch = /(1st|2nd|3rd|4th|\b[1-4](?:st|nd|rd|th)?\b)\s*(?:year|yr)?/i.exec(rawDeptStr);
-          if (yrMatch) {
-            const yrLower = yrMatch[0].toLowerCase();
-            let normYr = '1st Year';
-            if (yrLower.includes('2')) normYr = '2nd Year';
-            else if (yrLower.includes('3')) normYr = '3rd Year';
-            else if (yrLower.includes('4')) normYr = '4th Year';
-            donor['Year'] = normYr;
-            donor['Department'] = rawDeptStr.replace(yrMatch[0], '').replace(/[-–—/()]/g, '').trim();
-          }
+        if (fallbackIndex !== undefined && fallbackIndex < row.length) {
+          return row[fallbackIndex];
         }
+        return '';
+      };
 
-        // Data protection: Mask phone numbers if unauthenticated
-        if (!hasAuth && donor['Contact']) {
-          const raw = String(donor['Contact']);
-          donor['Contact'] = raw.length > 4 ? raw.slice(0, 2) + '******' + raw.slice(-2) : '******';
-          donor['Contact_Number'] = donor['Contact'];
+      const recordType = getVal('Record_Type') || 'Donor';
+      const lastDonatedDate = getVal('Last Donated Date', 10);
+      const donationType = getVal('Last Donation Type', 11);
+      const gender = getVal('Gender', 8);
+
+      let nextEligibleDate = getVal('Next Eligible Date', 14);
+      if (!nextEligibleDate && lastDonatedDate && donationType && gender) {
+        nextEligibleDate = getNextEligibleDate_(donationType, gender, lastDonatedDate);
+      }
+
+      let combinedDeptYear = getVal('Department / Year');
+      let dept = getVal('Department', 4);
+      let year = getVal('Year', 5);
+
+      if (!year && dept) {
+        const yrMatch = /(1st|2nd|3rd|4th|\b[1-4](?:st|nd|rd|th)?\b)\s*(?:year|yr)?/i.exec(String(dept));
+        if (yrMatch) {
+          year = normalizeYear_(yrMatch[0]);
+          dept = String(dept).replace(yrMatch[0], '').replace(/[-–—/()]/g, '').trim();
         }
+      }
 
-        if (!donor['Next Eligible Date'] && donor['Last Donated Date'] && donor['Last Donation Type'] && donor['Gender']) {
-          try {
-            const dateObj = new Date(donor['Last Donated Date']);
-            if (!isNaN(dateObj.getTime())) {
-              donor['Next Eligible Date'] = getNextEligibleDate_(
-                donor['Last Donation Type'],
-                donor['Gender'],
-                dateObj
-              );
-            }
-          } catch (err) {
-            donor['Next Eligible Date'] = 'Eligible';
-          }
-        }
-
-        return donor;
+      result.push({
+        'ID': String(getVal('ID', 0) || ('DON-' + r)).trim(),
+        'Record_Type': recordType,
+        'Name': String(getVal('Name', 1)).trim(),
+        'Blood Group': String(getVal('Blood Group', 2)).trim(),
+        'Contact': String(getVal('Contact', 3)).trim(),
+        'Department': String(dept || 'General').trim(),
+        'Year': String(year || '1st Year').trim(),
+        'Department_Year': combinedDeptYear || (year ? (dept ? dept + ' - ' + year : year) : dept),
+        'Age': getVal('Age', 6) !== '' ? Number(getVal('Age', 6)) : '',
+        'Weight': getVal('Weight', 7) !== '' ? Number(getVal('Weight', 7)) : '',
+        'Gender': String(gender).trim(),
+        'Location': String(getVal('Location', 9)).trim(),
+        'Last Donated Date': lastDonatedDate instanceof Date ? formatDate_(lastDonatedDate) : String(lastDonatedDate).trim(),
+        'Last Donation Type': String(donationType).trim(),
+        'Last Donation Venue': String(getVal('Last Donation Venue', 12)).trim(),
+        'Certificate URL': String(getVal('Certificate URL', 13)).trim(),
+        'Next Eligible Date': nextEligibleDate instanceof Date ? formatDate_(nextEligibleDate) : String(nextEligibleDate).trim(),
+        'Status': String(getVal('Status') || '').trim(),
+        'Urgency': String(getVal('Urgency') || '').trim(),
+        'Hospital_Venue': String(getVal('Hospital_Venue') || '').trim(),
+        'Units_Needed': getVal('Units_Needed') || '',
+        'Units_Collected': getVal('Units_Collected') || '',
+        'Assigned_Donor_ID': String(getVal('Assigned_Donor_ID') || '').trim(),
+        'Assigned_Donor_Name': String(getVal('Assigned_Donor_Name') || '').trim(),
+        'Camp_ID': String(getVal('Camp_ID') || '').trim(),
+        'Notes': String(getVal('Notes') || '').trim()
       });
+    }
 
-    return jsonResponse_({ status: 'success', data: donors });
+    return jsonResponse_({ status: 'success', data: result });
   } catch (error) {
-    return jsonResponse_({ status: 'error', error: 'Unable to load donor records: ' + sanitizeHtml_(error.message), data: [] });
+    return jsonResponse_({ status: 'error', error: error.message || 'Failed to retrieve donor records.' });
   }
 }
 
 function doPost(e) {
   try {
     const clientId = getClientId_(e);
-
-    // 1. Rate Limiting Check for Write Operations
+    
+    // 1. Rate Limiting Check
     if (!checkRateLimit_(clientId, true)) {
       return jsonResponse_({
         status: 'error',
-        success: false,
-        error: 'Too Many Requests: Rate limit exceeded for write operations. Please try again shortly.',
+        error: 'Too Many Requests: Rate limit exceeded. Please wait a minute.',
         code: 429
       });
     }
 
-    if (!e || !e.postData || typeof e.postData.contents !== 'string') {
-      throw new ValidationError_('Request body is required.');
+    if (!e || !e.postData || !e.postData.contents) {
+      throw new ValidationError_('Empty request body.');
     }
 
     if (e.postData.contents.length > MAX_PAYLOAD_BYTES) {
-      throw new ValidationError_('Payload size exceeds safe limit (64KB).');
+      throw new ValidationError_('Payload size exceeds safe limit.');
     }
 
     let body;
@@ -245,19 +261,150 @@ function doPost(e) {
     }
 
     const action = String(body.action || '').toLowerCase().trim();
-    const isUpdate = action === 'update' || action === 'edit' || action.startsWith('update_');
 
-    // 2. Authentication Check for Updates & Mutations
-    const token = body.auth_token || body.key || body.apiKey || (e.parameter && (e.parameter.key || e.parameter.auth)) || '';
+    // -------------------------------------------------------------
+    // Authentication Endpoints (Email OTP & Google OAuth)
+    // -------------------------------------------------------------
 
-    // Handle record deletion
+    // 1. Request Email OTP
+    if (action === 'request_otp') {
+      const email = String(body.email || '').trim().toLowerCase();
+      if (!email || !email.includes('@')) {
+        throw new ValidationError_('A valid email address is required.');
+      }
+
+      if (!isEmailAuthorized_(email)) {
+        return jsonResponse_({
+          status: 'success',
+          message: 'If this email is an authorized coordinator, a 6-digit verification code has been sent.'
+        });
+      }
+
+      // Generate 6-digit cryptographically random OTP
+      const otp = String(Math.floor(100000 + Math.random() * 900000));
+      const cache = CacheService.getScriptCache();
+      const emailHash = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, email));
+      cache.put('otp_' + emailHash, otp, 300); // 5 minutes expiry
+
+      // Send formatted HTML email via MailApp
+      const subject = 'NSS Rudhirasena Portal - Your Login Code: ' + otp;
+      const htmlBody = '<div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">' +
+        '<div style="text-align: center; margin-bottom: 20px;">' +
+          '<h2 style="color: #b91c1c; margin: 0; font-size: 20px;">NSS Rudhirasena MBCET</h2>' +
+          '<p style="color: #64748b; font-size: 13px; margin: 4px 0 0;">Authorized Coordinator Login Verification</p>' +
+        '</div>' +
+        '<div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 20px; text-align: center; margin: 20px 0;">' +
+          '<span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #991b1b;">' + otp + '</span>' +
+        '</div>' +
+        '<p style="font-size: 13px; color: #475569; line-height: 1.5;">This 6-digit verification code is valid for <strong>5 minutes</strong>. Use it to log into the NSS Rudhirasena Portal. Do not share this code with anyone.</p>' +
+        '<hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />' +
+        '<p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0;">If you did not request this login code, please disregard this email.</p>' +
+      '</div>';
+
+      try {
+        MailApp.sendEmail({
+          to: email,
+          name: 'NSS Rudhirasena MBCET',
+          subject: subject,
+          htmlBody: htmlBody
+        });
+      } catch (mailErr) {
+        Logger.log('Mail send error: ' + mailErr.message);
+        throw new ValidationError_('Email sending failed (' + mailErr.message + '). Please ensure Mail permissions are authorized in the Apps Script editor.');
+      }
+
+      return jsonResponse_({
+        status: 'success',
+        message: 'Verification code sent to ' + email
+      });
+    }
+
+    // 2. Verify Email OTP
+    if (action === 'verify_otp') {
+      const email = String(body.email || '').trim().toLowerCase();
+      const otp = String(body.otp || '').trim();
+      if (!email || !otp) {
+        throw new ValidationError_('Email and OTP verification code are required.');
+      }
+
+      if (!isEmailAuthorized_(email)) {
+        throw new ValidationError_('Access Denied: This email is not authorized to access this website.');
+      }
+
+      const cache = CacheService.getScriptCache();
+      const emailHash = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, email));
+      const storedOtp = cache.get('otp_' + emailHash);
+
+      if (!storedOtp || storedOtp !== otp) {
+        throw new ValidationError_('Invalid or expired verification code. Please request a new one.');
+      }
+
+      cache.remove('otp_' + emailHash);
+      const sessionToken = generateSessionToken_(email);
+
+      return jsonResponse_({
+        status: 'success',
+        success: true,
+        sessionToken: sessionToken,
+        user: {
+          email: email,
+          name: formatDonorName_(email.split('@')[0])
+        }
+      });
+    }
+
+    // 3. Verify Google Sign-In (OAuth ID Token)
+    if (action === 'verify_google_token') {
+      const idToken = String(body.idToken || body.credential || '').trim();
+      if (!idToken) {
+        throw new ValidationError_('Google ID token is required.');
+      }
+
+      const googleResp = UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken), {
+        muteHttpExceptions: true
+      });
+      if (googleResp.getResponseCode() !== 200) {
+        throw new ValidationError_('Invalid or expired Google authentication token.');
+      }
+
+      const payload = JSON.parse(googleResp.getContentText());
+      const email = String(payload.email || '').toLowerCase().trim();
+      const emailVerified = String(payload.email_verified) === 'true' || payload.email_verified === true;
+
+      if (!email || !emailVerified) {
+        throw new ValidationError_('Google email account could not be verified.');
+      }
+
+      if (!isEmailAuthorized_(email)) {
+        throw new ValidationError_('Access Denied: The Google Account (' + email + ') is not on the authorized coordinators list.');
+      }
+
+      const sessionToken = generateSessionToken_(email);
+      return jsonResponse_({
+        status: 'success',
+        success: true,
+        sessionToken: sessionToken,
+        user: {
+          email: email,
+          name: payload.name || formatDonorName_(email.split('@')[0]),
+          picture: payload.picture || ''
+        }
+      });
+    }
+
+    // -------------------------------------------------------------
+    // Authorized Mutations (CRUD Operations)
+    // -------------------------------------------------------------
+    const token = body.sessionToken || body.auth_token || body.key || body.apiKey || (e.parameter && (e.parameter.key || e.parameter.auth || e.parameter.sessionToken)) || '';
+
+    // Deletion
     if (action === 'delete' || action === 'delete_record') {
       const targetId = String(body.id || body.ID || body.Donor_ID || '').trim().toLowerCase();
       if (!targetId) {
         throw new ValidationError_('Record ID is required for deletion.');
       }
       if (!verifyAuth_(token)) {
-        throw new ValidationError_('Unauthorized: Admin authorization required to delete records.');
+        throw new ValidationError_('Unauthorized: Valid coordinator authentication required to delete records.');
       }
 
       const sheet = getSheet_();
@@ -290,8 +437,10 @@ function doPost(e) {
       return jsonResponse_({ status: 'success', message: 'Record removed.', id: targetId });
     }
 
-    if (isUpdate && !verifyAuth_(token)) {
-      throw new ValidationError_('Unauthorized: Admin authorization required to edit member details.');
+    // Check auth for any mutations
+    const isUpdate = action === 'update' || action === 'edit' || action.startsWith('update_');
+    if (!verifyAuth_(token)) {
+      throw new ValidationError_('Unauthorized: Valid coordinator authentication required.');
     }
 
     // 3. Strict Input Sanitization & Validation (OWASP Injection Protection)
@@ -524,18 +673,100 @@ function doOptions(e) {
 class ValidationError_ extends Error {}
 
 /**
- * Constant-time string comparison to mitigate timing attacks on secret tokens
+ * Run this function in Google Apps Script Editor to set authorized coordinators
+ * in private Script Properties and trigger Mail permissions authorization.
+ * e.g., setupAuthorizedAdmins("user1@example.com, user2@example.com")
  */
-function verifyAuth_(providedToken) {
-  if (!providedToken) return false;
-  const a = String(providedToken).trim();
-  const b = String(ADMIN_API_KEY).trim();
-  if (a.length !== b.length) return false;
+function setupAuthorizedAdmins(emailListString) {
+  const props = PropertiesService.getScriptProperties();
+  if (emailListString && typeof emailListString === 'string') {
+    props.setProperty('ALLOWED_EMAILS', emailListString);
+  }
+  
+  let secret = props.getProperty('SESSION_SECRET');
+  if (!secret) {
+    secret = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(Math.random() + '_' + Date.now())));
+    props.setProperty('SESSION_SECRET', secret);
+  }
+  
+  // Triggers MailApp permission check dialog in the Apps Script editor
+  const quota = MailApp.getRemainingDailyQuota();
+  const currentAllowed = props.getProperty('ALLOWED_EMAILS') || '';
+  Logger.log('Authorized Admins configured: ' + currentAllowed);
+  Logger.log('Daily Mail Quota Remaining: ' + quota);
+  return 'Success: Configured coordinators in Script Properties. Remaining daily email quota: ' + quota;
+}
+
+function getAuthorizedEmails_() {
+  const props = PropertiesService.getScriptProperties();
+  const raw = props.getProperty('ALLOWED_EMAILS') || '';
+  return raw.split(',').map(function (e) { return e.trim().toLowerCase(); }).filter(Boolean);
+}
+
+function isEmailAuthorized_(email) {
+  if (!email) return false;
+  const clean = String(email).trim().toLowerCase();
+  const list = getAuthorizedEmails_();
+  return list.indexOf(clean) !== -1;
+}
+
+function getSessionSecret_() {
+  const props = PropertiesService.getScriptProperties();
+  let secret = props.getProperty('SESSION_SECRET');
+  if (!secret) {
+    secret = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(Math.random() + '_' + Date.now())));
+    props.setProperty('SESSION_SECRET', secret);
+  }
+  return secret;
+}
+
+function generateSessionToken_(email) {
+  const exp = Date.now() + (12 * 60 * 60 * 1000); // 12 hours
+  const payload = email.toLowerCase().trim() + ':' + exp;
+  const secret = getSessionSecret_();
+  const sigBytes = Utilities.computeHmacSha256Signature(payload, secret);
+  const sig = Utilities.base64Encode(sigBytes);
+  return Utilities.base64Encode(payload) + '.' + sig;
+}
+
+function verifySessionToken_(token) {
+  if (!token || typeof token !== 'string') return false;
+  const parts = token.split('.');
+  if (parts.length !== 2) return false;
+  try {
+    const payloadBytes = Utilities.base64Decode(parts[0]);
+    const payload = Utilities.newBlob(payloadBytes).getDataAsString();
+    const subParts = payload.split(':');
+    if (subParts.length !== 2) return false;
+    const email = subParts[0];
+    const exp = parseInt(subParts[1], 10);
+    if (isNaN(exp) || Date.now() > exp) return false;
+    if (!isEmailAuthorized_(email)) return false;
+
+    const secret = getSessionSecret_();
+    const expectedSigBytes = Utilities.computeHmacSha256Signature(payload, secret);
+    const expectedSig = Utilities.base64Encode(expectedSigBytes);
+    return constantTimeEquals_(parts[1], expectedSig);
+  } catch (e) {
+    return false;
+  }
+}
+
+function constantTimeEquals_(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
   let result = 0;
   for (let i = 0; i < a.length; i++) {
     result |= a.charCodeAt(i) ^ b.charCodeAt(i);
   }
   return result === 0;
+}
+
+/**
+ * Validates coordinator session token
+ */
+function verifyAuth_(providedToken) {
+  if (!providedToken) return false;
+  return verifySessionToken_(providedToken);
 }
 
 /**
@@ -764,3 +995,25 @@ function authorizeAndTestDrive() {
     throw err;
   }
 }
+
+/**
+ * Run this in Apps Script Editor to test email delivery and grant Mail permissions!
+ * Click "Run" -> Click "Review Permissions" -> Choose Account -> Allow -> Check inbox.
+ */
+function testSendOtp() {
+  const testEmail = 'niranjanss2007@gmail.com';
+  const testOtp = String(Math.floor(100000 + Math.random() * 900000));
+  MailApp.sendEmail({
+    to: testEmail,
+    name: 'NSS Rudhirasena MBCET',
+    subject: 'NSS Rudhirasena Portal - Test Login Code: ' + testOtp,
+    htmlBody: '<div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">' +
+      '<h2 style="color: #b91c1c;">NSS Rudhirasena MBCET</h2>' +
+      '<p>Test Login Code: <strong style="font-size: 24px; color: #991b1b;">' + testOtp + '</strong></p>' +
+      '<p style="color: #64748b; font-size: 12px;">Google Mail permissions are active and working!</p>' +
+    '</div>'
+  });
+  Logger.log('Test email successfully dispatched to ' + testEmail);
+  return 'Test email successfully sent to ' + testEmail;
+}
+
