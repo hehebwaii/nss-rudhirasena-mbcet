@@ -270,9 +270,24 @@ function doPost(e) {
           
           const ALLOWED_MIME = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
           if (ALLOWED_MIME.includes(mimeType)) {
-            const safeDonorId = String(id).replace(/[^a-zA-Z0-9_-]/g, '');
-            const rawFileName = String(fileObj.name || (safeDonorId + '_Certificate')).replace(/[^a-zA-Z0-9._-]/g, '_');
-            const finalFileName = safeDonorId + '_' + rawFileName;
+            // Determine file extension
+            let extension = '';
+            if (fileObj.name && fileObj.name.includes('.')) {
+              extension = '.' + fileObj.name.split('.').pop().toLowerCase();
+            } else {
+              if (mimeType.includes('pdf')) extension = '.pdf';
+              else if (mimeType.includes('png')) extension = '.png';
+              else if (mimeType.includes('webp')) extension = '.webp';
+              else extension = '.jpg';
+            }
+
+            // Name file after the donor
+            const cleanDonorName = String(name || id || 'Donor')
+              .trim()
+              .replace(/[/\\?%*:|"<>]/g, '')
+              .replace(/\s+/g, ' ');
+
+            const finalFileName = cleanDonorName + extension;
 
             const decoded = Utilities.base64Decode(base64Str);
             const blob = Utilities.newBlob(decoded, mimeType, finalFileName);
