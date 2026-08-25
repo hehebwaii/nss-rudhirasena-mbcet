@@ -1,0 +1,176 @@
+import {
+  User,
+  Phone,
+  MapPin,
+  Droplet,
+  Activity,
+  Building2,
+  CalendarDays,
+  ExternalLink,
+  MessageCircle,
+} from 'lucide-react';
+import Modal from './Modal';
+import StatusBadge from './StatusBadge';
+import { daysRemaining, formatShortDate, getEligibility } from '../utils/donor';
+
+const dateClass = {
+  eligible: 'text-emerald-700',
+  cooling: 'text-orange-600',
+  unknown: 'text-slate-500',
+};
+
+export default function DonorProfileModal({ open, donor, onClose }) {
+  if (!open || !donor) return null;
+
+  const eligibility = getEligibility(donor);
+  const daysLeft = daysRemaining(donor);
+  const name = String(donor.Name || donor.ID || 'Unnamed');
+  const initials =
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((word) => word[0].toUpperCase())
+      .join('') || '?';
+  const certificateUrl = donor['Certificate URL']
+    ? String(donor['Certificate URL'])
+    : '';
+  const contact = donor.Contact ? String(donor.Contact) : '';
+  const digits = contact.replace(/[\s-]/g, '');
+
+  const fields = [
+    { icon: Building2, label: 'Department', value: donor.Department },
+    {
+      icon: Activity,
+      label: 'Age · Gender',
+      value:
+        [
+          donor.Age != null && donor.Age !== '' ? donor.Age : null,
+          donor.Gender || null,
+        ]
+          .filter(Boolean)
+          .join(' · ') || '',
+      tnum: true,
+    },
+    { icon: MapPin, label: 'Location', value: donor.Location },
+    {
+      icon: Droplet,
+      label: 'Last Donation Type',
+      value: donor['Last Donation Type'],
+    },
+    {
+      icon: MapPin,
+      label: 'Last Donation Venue',
+      value: donor['Last Donation Venue'],
+    },
+    {
+      icon: CalendarDays,
+      label: 'Last Donated Date',
+      value: formatShortDate(donor['Last Donated Date']),
+      tnum: true,
+    },
+  ];
+
+  const actionClass =
+    'flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-[color,background-color,border-color,transform] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98]';
+
+  return (
+    <Modal open={open} onClose={onClose} title="Donor Profile">
+      <div className="flex items-center gap-4">
+        <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-red-50 text-lg font-bold text-red-700 ring-1 ring-inset ring-red-200">
+          {initials}
+        </span>
+        <div className="min-w-0">
+          <h3 className="truncate text-xl font-bold tracking-tight text-slate-900">
+            {name}
+          </h3>
+          <p className="tnum mt-0.5 text-xs font-medium uppercase tracking-wide text-slate-400">
+            {donor.ID}
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="tnum inline-flex w-fit items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-bold text-red-700 ring-1 ring-inset ring-red-200">
+              <Droplet className="h-3 w-3" />
+              {donor['Blood Group'] || '—'}
+            </span>
+            <StatusBadge eligibility={eligibility} daysLeft={daysLeft} />
+          </div>
+        </div>
+      </div>
+
+      <dl className="mt-6 grid grid-cols-1 gap-x-6 gap-y-5 border-t border-slate-100 pt-5 sm:grid-cols-2">
+        {fields.map(({ icon: RowIcon, label, value, tnum }) => (
+          <div key={label} className="flex items-start gap-3">
+            <RowIcon className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+            <div className="min-w-0">
+              <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                {label}
+              </dt>
+              <dd
+                className={`mt-0.5 break-words text-sm font-semibold text-slate-800 ${tnum ? 'tnum' : ''}`}
+              >
+                {value || '—'}
+              </dd>
+            </div>
+          </div>
+        ))}
+        <div className="flex items-start gap-3">
+          <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+          <div className="min-w-0">
+            <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
+              Next Eligible Date
+            </dt>
+            <dd className={`tnum mt-0.5 text-sm font-bold ${dateClass[eligibility]}`}>
+              {formatShortDate(donor['Next Eligible Date'])}
+            </dd>
+          </div>
+        </div>
+      </dl>
+
+      {(contact || certificateUrl) && (
+        <div className="mt-6 grid grid-cols-1 gap-3 border-t border-slate-100 pt-5 sm:grid-cols-3">
+          {contact ? (
+            <>
+              <a
+                href={`tel:${digits}`}
+                className={`${actionClass} border-slate-300 text-slate-700 hover:border-red-300 hover:bg-red-50 hover:text-red-700 focus-visible:outline-red-600`}
+              >
+                <Phone className="h-4 w-4" />
+                Call
+              </a>
+              <a
+                href={`https://wa.me/${digits}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`${actionClass} border-emerald-300 text-emerald-700 hover:bg-emerald-50 focus-visible:outline-emerald-600`}
+              >
+                <MessageCircle className="h-4 w-4" />
+                WhatsApp
+              </a>
+            </>
+          ) : null}
+          {certificateUrl ? (
+            <a
+              href={certificateUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${actionClass} border-slate-300 text-slate-700 hover:border-red-300 hover:bg-red-50 hover:text-red-700 focus-visible:outline-red-600`}
+            >
+              <ExternalLink className="h-4 w-4" />
+              Certificate
+            </a>
+          ) : null}
+        </div>
+      )}
+
+      <div className="mt-6 flex justify-end border-t border-slate-100 pt-4">
+        <button
+          type="button"
+          onClick={onClose}
+          className="cursor-pointer rounded-xl border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-600 transition-[color,background-color,transform] duration-150 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 active:scale-[0.98]"
+        >
+          Close
+        </button>
+      </div>
+    </Modal>
+  );
+}

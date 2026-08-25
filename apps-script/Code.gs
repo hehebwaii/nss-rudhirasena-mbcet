@@ -1,0 +1,356 @@
+/**
+ * NSS Rudhirasena Blood Donor Registry - Google Apps Script Backend
+ * Handles GET (fetching all donors) and POST (registering new donors)
+ */
+
+const SHEET_NAME = 'Donors';
+
+const CANONICAL_HEADERS = [
+  'ID',
+  'Name',
+  'Blood Group',
+  'Contact',
+  'Department',
+  'Age',
+  'Weight',
+  'Gender',
+  'Location',
+  'Last Donated Date',
+  'Last Donation Type',
+  'Last Donation Venue',
+  'Certificate URL',
+  'Next Eligible Date'
+];
+
+const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+const GENDERS = ['Male', 'Female'];
+const DONATION_TYPES = ['Platelets', 'Whole Blood', 'Plasma'];
+
+// Header dictionary mapping common variations to canonical header keys
+const HEADER_MAP = {
+  'id': 'ID',
+  'donor id': 'ID',
+  'donor_id': 'ID',
+  'donorid': 'ID',
+  'name': 'Name',
+  'full name': 'Name',
+  'full_name': 'Name',
+  'fullname': 'Name',
+  'donor name': 'Name',
+  'donor_name': 'Name',
+  'blood group': 'Blood Group',
+  'blood_group': 'Blood Group',
+  'bloodgroup': 'Blood Group',
+  'group': 'Blood Group',
+  'contact': 'Contact',
+  'contact number': 'Contact',
+  'contact_number': 'Contact',
+  'contactnumber': 'Contact',
+  'phone': 'Contact',
+  'mobile': 'Contact',
+  'phone number': 'Contact',
+  'department': 'Department',
+  'department / year': 'Department',
+  'department_year': 'Department',
+  'departmentyear': 'Department',
+  'dept': 'Department',
+  'age': 'Age',
+  'weight': 'Weight',
+  'weight (kg)': 'Weight',
+  'weight_kg': 'Weight',
+  'gender': 'Gender',
+  'sex': 'Gender',
+  'location': 'Location',
+  'district': 'Location',
+  'district / location': 'Location',
+  'district_location': 'Location',
+  'city': 'Location',
+  'last donated date': 'Last Donated Date',
+  'last_donated_date': 'Last Donated Date',
+  'last donation date': 'Last Donated Date',
+  'last donated': 'Last Donated Date',
+  'last donation type': 'Last Donation Type',
+  'last_donation_type': 'Last Donation Type',
+  'donation type': 'Last Donation Type',
+  'last donation venue': 'Last Donation Venue',
+  'last_donation_venue': 'Last Donation Venue',
+  'donation venue': 'Last Donation Venue',
+  'venue': 'Last Donation Venue',
+  'certificate url': 'Certificate URL',
+  'certificate_url': 'Certificate URL',
+  'certificate link': 'Certificate URL',
+  'cert url': 'Certificate URL',
+  'certificate': 'Certificate URL',
+  'next eligible date': 'Next Eligible Date',
+  'next_eligible_date': 'Next Eligible Date',
+  'eligible date': 'Next Eligible Date'
+};
+
+function doGet(e) {
+  try {
+    const sheet = getSheet_();
+    const values = sheet.getDataRange().getValues();
+    if (values.length < 2) {
+      return jsonResponse_({ status: 'success', data: [] });
+    }
+
+    const rawHeaders = values[0].map(h => String(h).trim());
+    
+    // Map raw headers to normalized canonical keys
+    const mappedHeaders = rawHeaders.map(h => {
+      const cleaned = h.toLowerCase().replace(/[\s_\-]+/g, ' ').trim();
+      return HEADER_MAP[cleaned] || h;
+    });
+
+    const donors = values
+      .slice(1)
+      .filter(row => row.some(cell => cell !== null && cell !== undefined && String(cell).trim() !== ''))
+      .map((row, index) => {
+        const donor = {};
+        
+        // Populate raw and canonical keys
+        rawHeaders.forEach((rawHeader, i) => {
+          const val = cellValue_(row[i]);
+          donor[rawHeader] = val;
+          const canonical = mappedHeaders[i];
+          if (canonical) {
+            donor[canonical] = val;
+          }
+        });
+
+        // Ensure fallback ID
+        if (!donor['ID']) {
+          donor['ID'] = 'RUD-' + String(index + 1).padStart(3, '0');
+        }
+
+        // Calculate next eligible date if missing but donation date exists
+        if (!donor['Next Eligible Date'] && donor['Last Donated Date'] && donor['Last Donation Type'] && donor['Gender']) {
+          try {
+            const dateObj = new Date(donor['Last Donated Date']);
+            if (!isNaN(dateObj.getTime())) {
+              donor['Next Eligible Date'] = getNextEligibleDate_(
+                donor['Last Donation Type'],
+                donor['Gender'],
+                dateObj
+              );
+            }
+          } catch (err) {
+            donor['Next Eligible Date'] = 'Eligible';
+          }
+        }
+
+        return donor;
+      });
+
+    return jsonResponse_({ status: 'success', data: donors });
+  } catch (error) {
+    return jsonResponse_({ status: 'error', error: 'Unable to load donor records: ' + error.message, data: [] });
+  }
+}
+
+function doPost(e) {
+  try {
+    if (!e || !e.postData || typeof e.postData.contents !== 'string') {
+      throw new ValidationError_('Request body is required.');
+    }
+
+    let body;
+    try {
+      body = JSON.parse(e.postData.contents);
+    } catch (parseError) {
+      throw new ValidationError_('Invalid JSON payload.');
+    }
+
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      throw new ValidationError_('Payload must be a JSON object.');
+    }
+
+    const id = optStr_(body.ID || body.Donor_ID, 50) || generateId_();
+    const name = reqStr_(body.Name || body.Full_Name, 'Name', 100);
+    const bloodGroup = reqEnum_(body['Blood Group'] || body.Blood_Group, BLOOD_GROUPS, 'Blood Group');
+    const contact = reqContact_(body.Contact || body.Contact_Number || body.Phone);
+    const department = reqStr_(body.Department || body.Department_Year, 'Department', 100);
+    const age = reqNumber_(body.Age, 'Age', 16, 100);
+    const weight = reqNumber_(body.Weight || body.Weight_kg, 'Weight', 25, 250);
+    const gender = reqEnum_(body.Gender, GENDERS, 'Gender');
+    const location = reqStr_(body.Location || body.District_Location, 'Location', 150);
+    const lastDonated = reqDate_(body['Last Donated Date'] || body.Last_Donated_Date, 'Last Donated Date');
+    const donationType = reqEnum_(body['Last Donation Type'] || body.Last_Donation_Type, DONATION_TYPES, 'Last Donation Type');
+    const venue = reqStr_(body['Last Donation Venue'] || body.Last_Donation_Venue, 'Last Donation Venue', 150);
+    const certUrl = optUrl_(body['Certificate URL'] || body.Certificate_URL);
+
+    const nextEligibleDate = getNextEligibleDate_(donationType, gender, lastDonated);
+
+    const sheet = getSheet_();
+    const headerRow = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 1)).getValues()[0];
+    
+    const rowDataMap = {
+      'ID': id,
+      'Name': name,
+      'Blood Group': bloodGroup,
+      'Contact': contact,
+      'Department': department,
+      'Age': age,
+      'Weight': weight,
+      'Gender': gender,
+      'Location': location,
+      'Last Donated Date': formatDate_(lastDonated),
+      'Last Donation Type': donationType,
+      'Last Donation Venue': venue,
+      'Certificate URL': certUrl,
+      'Next Eligible Date': nextEligibleDate
+    };
+
+    let newRow = [];
+    if (headerRow.length > 0 && String(headerRow[0]).trim() !== '') {
+      newRow = headerRow.map(h => {
+        const cleaned = String(h).trim().toLowerCase().replace(/[\s_\-]+/g, ' ');
+        const canonicalKey = HEADER_MAP[cleaned] || String(h).trim();
+        return rowDataMap[canonicalKey] !== undefined ? rowDataMap[canonicalKey] : '';
+      });
+    } else {
+      newRow = CANONICAL_HEADERS.map(h => rowDataMap[h] !== undefined ? rowDataMap[h] : '');
+    }
+
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000);
+    try {
+      sheet.appendRow(newRow);
+    } finally {
+      lock.releaseLock();
+    }
+
+    return jsonResponse_({
+      status: 'success',
+      success: true,
+      id: id,
+      nextEligibleDate: nextEligibleDate
+    });
+  } catch (error) {
+    const message = error instanceof ValidationError_ ? error.message : 'Could not save the donor record: ' + error.message;
+    return jsonResponse_({ status: 'error', success: false, error: message });
+  }
+}
+
+function doOptions(e) {
+  return ContentService.createTextOutput('')
+    .setMimeType(ContentService.MimeType.TEXT);
+}
+
+class ValidationError_ extends Error {}
+
+function getNextEligibleDate_(donationType, gender, lastDonated) {
+  const base = new Date(lastDonated.getFullYear(), lastDonated.getMonth(), lastDonated.getDate());
+  let days;
+
+  switch (donationType) {
+    case 'Platelets':
+      days = 14;
+      break;
+    case 'Plasma':
+      days = 28;
+      break;
+    case 'Whole Blood':
+      days = gender === 'Female' ? 120 : 90;
+      break;
+    default:
+      throw new ValidationError_('Unsupported donation type.');
+  }
+
+  base.setDate(base.getDate() + days);
+  return formatDate_(base);
+}
+
+function getSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.getActiveSheet();
+  }
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAME);
+  }
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(CANONICAL_HEADERS);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function cleanStr_(value, maxLength) {
+  return value == null ? '' : String(value).trim().slice(0, maxLength);
+}
+
+function reqStr_(value, field, maxLength) {
+  const cleaned = cleanStr_(value, maxLength);
+  if (!cleaned) {
+    throw new ValidationError_(field + ' is required.');
+  }
+  return cleaned;
+}
+
+function optStr_(value, maxLength) {
+  return cleanStr_(value, maxLength);
+}
+
+function reqEnum_(value, allowed, field) {
+  const cleaned = cleanStr_(value, 30);
+  const match = allowed.find((option) => option.toLowerCase() === cleaned.toLowerCase());
+  if (!match) {
+    throw new ValidationError_(field + ' must be one of: ' + allowed.join(', ') + '.');
+  }
+  return match;
+}
+
+function reqNumber_(value, field, min, max) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < min || n > max) {
+    throw new ValidationError_(field + ' must be a number between ' + min + ' and ' + max + '.');
+  }
+  return n;
+}
+
+function reqContact_(value) {
+  const cleaned = String(value == null ? '' : value).replace(/[\s-]/g, '').slice(0, 20);
+  if (!/^\+?\d{7,15}$/.test(cleaned)) {
+    throw new ValidationError_('Contact must be a valid phone number.');
+  }
+  return cleaned;
+}
+
+function reqDate_(value, field) {
+  const date = new Date(value);
+  if (isNaN(date.getTime())) {
+    throw new ValidationError_(field + ' must be a valid date (YYYY-MM-DD).');
+  }
+  if (date.getTime() > Date.now()) {
+    throw new ValidationError_(field + ' cannot be in the future.');
+  }
+  return date;
+}
+
+function optUrl_(value) {
+  const cleaned = cleanStr_(value, 500);
+  if (cleaned && !/^https?:\/\/\S+$/i.test(cleaned)) {
+    throw new ValidationError_('Certificate URL must start with http:// or https://.');
+  }
+  return cleaned;
+}
+
+function cellValue_(cell) {
+  return cell instanceof Date ? formatDate_(cell) : (cell === null || cell === undefined ? '' : cell);
+}
+
+function formatDate_(date) {
+  return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+function generateId_() {
+  return 'DON-' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyMMddHHmmssSSS');
+}
+
+function jsonResponse_(payload) {
+  return ContentService
+    .createTextOutput(JSON.stringify(payload))
+    .setMimeType(ContentService.MimeType.JSON);
+}

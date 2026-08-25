@@ -1,0 +1,121 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ *
+ * Design tokens — Operate-mode admin surface, blood-donor brand (red)
+ * ------------------------------------------------------------------ */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, sans-serif;
+
+  /* Elevation: real offset + soft blur, neutral-tinted (no colored halos) */
+  --shadow-card: 0 1px 2px -1px rgb(15 23 42 / 0.08),
+    0 3px 10px -3px rgb(15 23 42 / 0.10);
+  --shadow-raised: 0 2px 4px -2px rgb(15 23 42 / 0.10),
+    0 8px 24px -6px rgb(15 23 42 / 0.14);
+  --shadow-overlay: 0 8px 20px -6px rgb(15 23 42 / 0.20),
+    0 24px 56px -12px rgb(15 23 42 / 0.28);
+
+  /* Motion: confident deceleration from an already-visible default */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --animate-rise: rise 0.5s var(--ease-out-expo) both;
+  --animate-fade: fade 0.3s ease-out both;
+  --animate-pop: pop 0.24s var(--ease-out-expo) both;
+  --animate-veil: veil 0.2s ease-out both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+@keyframes veil {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Browser surfaces — the parts no framework themes. Cheapest signal
+ * that the page was built, not assembled.
+ * ------------------------------------------------------------------ */
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    /* native controls (date picker, select, checkbox) inherit the brand */
+    accent-color: #b91c1c;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background-color: #fecaca;
+    color: #7f1d1d;
+  }
+
+  /* Numerals in data — dates, IDs, counts, phone numbers — line up */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+
+  /* Themed scrollbars instead of the OS default */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    border-radius: 9999px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: #94a3b8;
+  }
+}
+
+/* Motion is an enhancement, never a gate on meaning. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
