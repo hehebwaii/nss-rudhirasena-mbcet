@@ -155,6 +155,21 @@ function doGet(e) {
           donor['ID'] = 'RUD-' + String(index + 1).padStart(3, '0');
         }
 
+        // Normalize Year and Department if combined in Department_Year / Department
+        if (!donor['Year']) {
+          const rawDeptStr = String(donor['Department'] || donor['Department_Year'] || '').trim();
+          const yrMatch = /(1st|2nd|3rd|4th|\b[1-4](?:st|nd|rd|th)?\b)\s*(?:year|yr)?/i.exec(rawDeptStr);
+          if (yrMatch) {
+            const yrLower = yrMatch[0].toLowerCase();
+            let normYr = '1st Year';
+            if (yrLower.includes('2')) normYr = '2nd Year';
+            else if (yrLower.includes('3')) normYr = '3rd Year';
+            else if (yrLower.includes('4')) normYr = '4th Year';
+            donor['Year'] = normYr;
+            donor['Department'] = rawDeptStr.replace(yrMatch[0], '').replace(/[-–—/()]/g, '').trim();
+          }
+        }
+
         // Data protection: Mask phone numbers if unauthenticated
         if (!hasAuth && donor['Contact']) {
           const raw = String(donor['Contact']);
@@ -250,6 +265,8 @@ function doPost(e) {
     const allValues = sheet.getDataRange().getValues();
     const headerRow = allValues.length > 0 ? allValues[0] : CANONICAL_HEADERS;
     
+    const combinedDeptYear = year ? (department ? department + ' - ' + year : year) : department;
+
     // Sanitize for Formula Injection before writing to Google Sheet
     const rowDataMap = {
       'ID': sanitizeFormula_(id),
@@ -261,7 +278,8 @@ function doPost(e) {
       'Contact': sanitizeFormula_(contact),
       'Contact_Number': sanitizeFormula_(contact),
       'Department': sanitizeFormula_(department),
-      'Department_Year': sanitizeFormula_(department),
+      'Department_Year': sanitizeFormula_(combinedDeptYear),
+      'Department / Year': sanitizeFormula_(combinedDeptYear),
       'Year': sanitizeFormula_(year),
       'Year_of_Study': sanitizeFormula_(year),
       'Age': age,

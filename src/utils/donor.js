@@ -141,12 +141,18 @@ export function normalizeDonor(raw, index = 0) {
   let rawDept = pick('Department', 'Department_Year', 'department_year', 'DepartmentYear', 'Dept', 'dept', 'Department / Year');
   let rawYear = pick('Year', 'Year_of_Study', 'year_of_study', 'YearOfStudy', 'year', 'Batch', 'batch', 'Year / Batch');
 
-  // If year is not separately defined but embedded in department (e.g. "CS 3rd Year")
+  // Extract year if combined with department (e.g. "ECE - 2nd Year", "CS 3rd Year", "ME (4th Year)")
   if (!rawYear && rawDept) {
-    const yearMatch = /(1st|2nd|3rd|4th|\b[1-4]\b)\s*(year|yr)?/i.exec(rawDept);
+    const yearMatch = /(1st|2nd|3rd|4th|\b[1-4](?:st|nd|rd|th)?\b)\s*(?:year|yr)?/i.exec(String(rawDept));
     if (yearMatch) {
       rawYear = normalizeYear(yearMatch[0]);
-      rawDept = rawDept.replace(yearMatch[0], '').replace(/[-–—/]/g, '').trim();
+      rawDept = String(rawDept).replace(yearMatch[0], '').replace(/[-–—/()]/g, '').trim();
+    }
+  } else if (rawYear && rawDept) {
+    // If rawDept contains year repeated, clean it up
+    const yearMatch = /(1st|2nd|3rd|4th|\b[1-4](?:st|nd|rd|th)?\b)\s*(?:year|yr)?/i.exec(String(rawDept));
+    if (yearMatch) {
+      rawDept = String(rawDept).replace(yearMatch[0], '').replace(/[-–—/()]/g, '').trim();
     }
   }
 
