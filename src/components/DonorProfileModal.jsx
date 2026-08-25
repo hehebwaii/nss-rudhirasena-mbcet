@@ -6,6 +6,7 @@ import {
   Activity,
   Building2,
   CalendarDays,
+  Edit3,
   ExternalLink,
   MessageCircle,
 } from 'lucide-react';
@@ -19,12 +20,12 @@ const dateClass = {
   unknown: 'text-slate-500',
 };
 
-export default function DonorProfileModal({ open, donor, onClose }) {
+export default function DonorProfileModal({ open, donor, onClose, onEdit }) {
   if (!open || !donor) return null;
 
   const eligibility = getEligibility(donor);
   const daysLeft = daysRemaining(donor);
-  const name = String(donor.Name || donor.ID || 'Unnamed');
+  const name = String(donor.Name || donor.Full_Name || donor.ID || 'Unnamed');
   const initials =
     name
       .split(/\s+/)
@@ -32,14 +33,14 @@ export default function DonorProfileModal({ open, donor, onClose }) {
       .slice(0, 2)
       .map((word) => word[0].toUpperCase())
       .join('') || '?';
-  const certificateUrl = donor['Certificate URL']
-    ? String(donor['Certificate URL'])
+  const certificateUrl = donor['Certificate URL'] || donor.Certificate_URL
+    ? String(donor['Certificate URL'] || donor.Certificate_URL)
     : '';
-  const contact = donor.Contact ? String(donor.Contact) : '';
+  const contact = donor.Contact || donor.Contact_Number ? String(donor.Contact || donor.Contact_Number) : '';
   const digits = contact.replace(/[\s-]/g, '');
 
   const fields = [
-    { icon: Building2, label: 'Department', value: donor.Department },
+    { icon: Building2, label: 'Department', value: donor.Department || donor.Department_Year },
     {
       icon: Activity,
       label: 'Age · Gender',
@@ -52,21 +53,21 @@ export default function DonorProfileModal({ open, donor, onClose }) {
           .join(' · ') || '',
       tnum: true,
     },
-    { icon: MapPin, label: 'Location', value: donor.Location },
+    { icon: MapPin, label: 'Location', value: donor.Location || donor.District_Location },
     {
       icon: Droplet,
       label: 'Last Donation Type',
-      value: donor['Last Donation Type'],
+      value: donor['Last Donation Type'] || donor.Last_Donation_Type,
     },
     {
       icon: MapPin,
       label: 'Last Donation Venue',
-      value: donor['Last Donation Venue'],
+      value: donor['Last Donation Venue'] || donor.Last_Donation_Venue,
     },
     {
       icon: CalendarDays,
       label: 'Last Donated Date',
-      value: formatShortDate(donor['Last Donated Date']),
+      value: formatShortDate(donor['Last Donated Date'] || donor.Last_Donated_Date),
       tnum: true,
     },
   ];
@@ -76,25 +77,41 @@ export default function DonorProfileModal({ open, donor, onClose }) {
 
   return (
     <Modal open={open} onClose={onClose} title="Donor Profile">
-      <div className="flex items-center gap-4">
-        <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-red-50 text-lg font-bold text-red-700 ring-1 ring-inset ring-red-200">
-          {initials}
-        </span>
-        <div className="min-w-0">
-          <h3 className="truncate text-xl font-bold tracking-tight text-slate-900">
-            {name}
-          </h3>
-          <p className="tnum mt-0.5 text-xs font-medium uppercase tracking-wide text-slate-400">
-            {donor.ID}
-          </p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="tnum inline-flex w-fit items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-bold text-red-700 ring-1 ring-inset ring-red-200">
-              <Droplet className="h-3 w-3" />
-              {donor['Blood Group'] || '—'}
-            </span>
-            <StatusBadge eligibility={eligibility} daysLeft={daysLeft} />
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-red-50 text-lg font-bold text-red-700 ring-1 ring-inset ring-red-200">
+            {initials}
+          </span>
+          <div className="min-w-0">
+            <h3 className="truncate text-xl font-bold tracking-tight text-slate-900">
+              {name}
+            </h3>
+            <p className="tnum mt-0.5 text-xs font-medium uppercase tracking-wide text-slate-400">
+              {donor.ID || donor.Donor_ID}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="tnum inline-flex w-fit items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-bold text-red-700 ring-1 ring-inset ring-red-200">
+                <Droplet className="h-3 w-3" />
+                {donor['Blood Group'] || donor.Blood_Group || '—'}
+              </span>
+              <StatusBadge eligibility={eligibility} daysLeft={daysLeft} />
+            </div>
           </div>
         </div>
+
+        {onEdit && (
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onEdit(donor);
+            }}
+            className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-xs transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-red-600 active:scale-[0.98]"
+          >
+            <Edit3 className="h-3.5 w-3.5" />
+            <span>Edit</span>
+          </button>
+        )}
       </div>
 
       <dl className="mt-6 grid grid-cols-1 gap-x-6 gap-y-5 border-t border-slate-100 pt-5 sm:grid-cols-2">
@@ -120,7 +137,7 @@ export default function DonorProfileModal({ open, donor, onClose }) {
               Next Eligible Date
             </dt>
             <dd className={`tnum mt-0.5 text-sm font-bold ${dateClass[eligibility]}`}>
-              {formatShortDate(donor['Next Eligible Date'])}
+              {formatShortDate(donor['Next Eligible Date'] || donor.Next_Eligible_Date)}
             </dd>
           </div>
         </div>
@@ -162,7 +179,20 @@ export default function DonorProfileModal({ open, donor, onClose }) {
         </div>
       )}
 
-      <div className="mt-6 flex justify-end border-t border-slate-100 pt-4">
+      <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4">
+        {onEdit ? (
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onEdit(donor);
+            }}
+            className="flex cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-bold text-white transition-[background-color,transform] duration-150 hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-slate-900 active:scale-[0.98]"
+          >
+            <Edit3 className="h-4 w-4 text-slate-300" />
+            Edit Details
+          </button>
+        ) : <div />}
         <button
           type="button"
           onClick={onClose}

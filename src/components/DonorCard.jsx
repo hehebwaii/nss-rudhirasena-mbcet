@@ -1,14 +1,14 @@
-import { ExternalLink, Eye, Phone } from 'lucide-react';
+import { Edit3, ExternalLink, Eye, Phone } from 'lucide-react';
 import StatusBadge from './StatusBadge';
 import { daysRemaining, formatShortDate, getEligibility } from '../utils/donor';
 
-export default function DonorCard({ donor, onView, style }) {
+export default function DonorCard({ donor, onView, onEdit, style }) {
   const eligibility = getEligibility(donor);
   const daysLeft = daysRemaining(donor);
-  const certificateUrl = donor['Certificate URL']
-    ? String(donor['Certificate URL'])
+  const certificateUrl = donor['Certificate URL'] || donor.Certificate_URL
+    ? String(donor['Certificate URL'] || donor.Certificate_URL)
     : '';
-  const name = String(donor.Name || donor.ID || 'Unnamed');
+  const name = String(donor.Name || donor.Full_Name || donor.ID || 'Unnamed');
 
   return (
     <article
@@ -18,7 +18,7 @@ export default function DonorCard({ donor, onView, style }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-bold text-slate-900">{name}</p>
-          <p className="tnum mt-0.5 truncate text-xs text-slate-400">{donor.ID}</p>
+          <p className="tnum mt-0.5 truncate text-xs text-slate-400">{donor.ID || donor.Donor_ID}</p>
           {donor.Contact && (
             <p className="tnum mt-1 flex items-center gap-1 text-xs text-slate-500">
               <Phone className="h-3 w-3" />
@@ -27,7 +27,7 @@ export default function DonorCard({ donor, onView, style }) {
           )}
         </div>
         <span className="tnum inline-flex shrink-0 items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-bold text-red-700 ring-1 ring-inset ring-red-200">
-          {donor['Blood Group'] || '—'}
+          {donor['Blood Group'] || donor.Blood_Group || '—'}
         </span>
       </div>
 
@@ -42,14 +42,14 @@ export default function DonorCard({ donor, onView, style }) {
         <div>
           <dt className="text-slate-400">Location</dt>
           <dd className="mt-0.5 truncate font-medium text-slate-700">
-            {donor.Location || '—'}
+            {donor.Location || donor.District_Location || '—'}
           </dd>
         </div>
         <div>
           <dt className="text-slate-400">Last Donation</dt>
           <dd className="tnum mt-0.5 font-medium text-slate-700">
-            {donor['Last Donation Type'] || '—'} ·{' '}
-            {formatShortDate(donor['Last Donated Date'])}
+            {donor['Last Donation Type'] || donor.Last_Donation_Type || '—'} ·{' '}
+            {formatShortDate(donor['Last Donated Date'] || donor.Last_Donated_Date)}
           </dd>
         </div>
         <div>
@@ -63,7 +63,7 @@ export default function DonorCard({ donor, onView, style }) {
                   : 'text-slate-500'
             }`}
           >
-            {formatShortDate(donor['Next Eligible Date'])}
+            {formatShortDate(donor['Next Eligible Date'] || donor.Next_Eligible_Date)}
           </dd>
         </div>
       </dl>
@@ -80,16 +80,27 @@ export default function DonorCard({ donor, onView, style }) {
               target="_blank"
               rel="noopener noreferrer"
               aria-label={`Open certificate for ${name}`}
-              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-slate-500 transition-colors duration-150 hover:bg-red-50 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-slate-500 transition-colors duration-150 hover:bg-red-50 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
             >
               <ExternalLink className="h-4 w-4" />
             </a>
           ) : null}
+          {onEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(donor)}
+              aria-label={`Edit details for ${name}`}
+              title="Edit Details"
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-slate-500 transition-colors duration-150 hover:bg-red-50 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 active:scale-95"
+            >
+              <Edit3 className="h-4 w-4" />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onView(donor)}
             aria-label={`View profile of ${name}`}
-            className="flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-red-700 transition-[color,background-color,transform] duration-150 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 active:scale-95"
+            className="flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold text-red-700 transition-[color,background-color,transform] duration-150 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 active:scale-95"
           >
             <Eye className="h-4 w-4" />
             View

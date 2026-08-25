@@ -165,6 +165,9 @@ function doPost(e) {
       throw new ValidationError_('Payload must be a JSON object.');
     }
 
+    const action = String(body.action || '').toLowerCase().trim();
+    const isUpdate = action === 'update' || action === 'edit';
+
     const id = optStr_(body.ID || body.Donor_ID, 50) || generateId_();
     const name = reqStr_(body.Name || body.Full_Name, 'Name', 100);
     const bloodGroup = reqEnum_(body['Blood Group'] || body.Blood_Group, BLOOD_GROUPS, 'Blood Group');
@@ -182,40 +185,70 @@ function doPost(e) {
     const nextEligibleDate = getNextEligibleDate_(donationType, gender, lastDonated);
 
     const sheet = getSheet_();
-    const headerRow = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 1)).getValues()[0];
+    const allValues = sheet.getDataRange().getValues();
+    const headerRow = allValues.length > 0 ? allValues[0] : CANONICAL_HEADERS;
     
     const rowDataMap = {
       'ID': id,
+      'Donor_ID': id,
       'Name': name,
+      'Full_Name': name,
       'Blood Group': bloodGroup,
+      'Blood_Group': bloodGroup,
       'Contact': contact,
+      'Contact_Number': contact,
       'Department': department,
+      'Department_Year': department,
       'Age': age,
       'Weight': weight,
+      'Weight_kg': weight,
       'Gender': gender,
       'Location': location,
+      'District_Location': location,
       'Last Donated Date': formatDate_(lastDonated),
+      'Last_Donated_Date': formatDate_(lastDonated),
       'Last Donation Type': donationType,
+      'Last_Donation_Type': donationType,
       'Last Donation Venue': venue,
+      'Last_Donation_Venue': venue,
       'Certificate URL': certUrl,
-      'Next Eligible Date': nextEligibleDate
+      'Certificate_URL': certUrl,
+      'Next Eligible Date': nextEligibleDate,
+      'Next_Eligible_Date': nextEligibleDate
     };
 
-    let newRow = [];
+    let formattedRow = [];
     if (headerRow.length > 0 && String(headerRow[0]).trim() !== '') {
-      newRow = headerRow.map(h => {
+      formattedRow = headerRow.map(h => {
         const cleaned = String(h).trim().toLowerCase().replace(/[\s_\-]+/g, ' ');
         const canonicalKey = HEADER_MAP[cleaned] || String(h).trim();
-        return rowDataMap[canonicalKey] !== undefined ? rowDataMap[canonicalKey] : '';
+        return rowDataMap[canonicalKey] !== undefined ? rowDataMap[canonicalKey] : (rowDataMap[String(h).trim()] !== undefined ? rowDataMap[String(h).trim()] : '');
       });
     } else {
-      newRow = CANONICAL_HEADERS.map(h => rowDataMap[h] !== undefined ? rowDataMap[h] : '');
+      formattedRow = CANONICAL_HEADERS.map(h => rowDataMap[h] !== undefined ? rowDataMap[h] : '');
     }
 
     const lock = LockService.getScriptLock();
     lock.waitLock(10000);
+    let updatedRowIndex = -1;
     try {
-      sheet.appendRow(newRow);
+      if (isUpdate && allValues.length > 1) {
+        for (let r = 1; r < allValues.length; r++) {
+          for (let c = 0; c < allValues[r].length; c++) {
+            if (String(allValues[r][c]).trim().toLowerCase() === id.toLowerCase()) {
+              updatedRowIndex = r + 1; // 1-based index
+              break;
+            }
+          }
+          if (updatedRowIndex !== -1) break;
+        }
+      }
+
+      if (updatedRowIndex > 0) {
+        sheet.getRange(updatedRowIndex, 1, 1, formattedRow.length).setValues([formattedRow]);
+      } else {
+        sheet.appendRow(formattedRow);
+      }
     } finally {
       lock.releaseLock();
     }
@@ -223,6 +256,7 @@ function doPost(e) {
     return jsonResponse_({
       status: 'success',
       success: true,
+      message: updatedRowIndex > 0 ? 'Donor updated successfully' : 'Donor added successfully',
       id: id,
       nextEligibleDate: nextEligibleDate
     });

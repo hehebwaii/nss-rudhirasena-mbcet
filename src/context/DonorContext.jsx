@@ -75,13 +75,51 @@ export function DonorProvider({ children }) {
     return data;
   }, []);
 
+  const updateDonor = useCallback(async (donorId, payload) => {
+    const fullPayload = {
+      action: 'update',
+      ID: donorId,
+      Donor_ID: donorId,
+      ...payload,
+    };
+
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(fullPayload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API responded with status ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (data && (data.status === 'error' || data.success === false)) {
+      throw new Error(data.error || 'Failed to update donor details.');
+    }
+
+    // Optimistically update local donor state
+    const normalized = normalizeDonor({
+      ID: donorId,
+      Donor_ID: donorId,
+      ...payload,
+      'Next Eligible Date': data.nextEligibleDate || payload['Next Eligible Date'] || 'Eligible',
+    });
+
+    setDonors((prev) =>
+      prev.map((d) => (d.ID === donorId || d.Donor_ID === donorId ? { ...d, ...normalized } : d))
+    );
+
+    return data;
+  }, []);
+
   useEffect(() => {
     loadDonors();
   }, [loadDonors]);
 
   const value = useMemo(
-    () => ({ donors, status, error, lastUpdated, loadDonors, addDonor }),
-    [donors, status, error, lastUpdated, loadDonors, addDonor]
+    () => ({ donors, status, error, lastUpdated, loadDonors, addDonor, updateDonor }),
+    [donors, status, error, lastUpdated, loadDonors, addDonor, updateDonor]
   );
 
   return <DonorContext.Provider value={value}>{children}</DonorContext.Provider>;

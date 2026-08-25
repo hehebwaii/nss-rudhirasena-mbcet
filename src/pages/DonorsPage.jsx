@@ -19,6 +19,7 @@ import DonorTable from '../components/DonorTable';
 import DonorCard from '../components/DonorCard';
 import DonorProfileModal from '../components/DonorProfileModal';
 import RegisterDonorModal from '../components/RegisterDonorModal';
+import EditDonorModal from '../components/EditDonorModal';
 import {
   BLOOD_GROUPS,
   getEligibility,
@@ -39,6 +40,7 @@ export default function DonorsPage() {
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'grid'
   const [registerOpen, setRegisterOpen] = useState(false);
   const [profileDonor, setProfileDonor] = useState(null);
+  const [editingDonor, setEditingDonor] = useState(null);
 
   const locations = useMemo(() => uniqueLocations(donors), [donors]);
 
@@ -432,13 +434,18 @@ export default function DonorsPage() {
         ) : filtered.length > 0 ? (
           viewMode === 'table' ? (
             <>
-              <DonorTable donors={filtered} onView={setProfileDonor} />
+              <DonorTable
+                donors={filtered}
+                onView={setProfileDonor}
+                onEdit={setEditingDonor}
+              />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:hidden">
                 {filtered.map((donor, index) => (
                   <DonorCard
-                    key={String(donor.ID || index)}
+                    key={String(donor.ID || donor.Donor_ID || index)}
                     donor={donor}
                     onView={setProfileDonor}
+                    onEdit={setEditingDonor}
                     style={{ animationDelay: `${Math.min(index, 14) * 25}ms` }}
                   />
                 ))}
@@ -448,9 +455,10 @@ export default function DonorsPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {filtered.map((donor, index) => (
                 <DonorCard
-                  key={String(donor.ID || index)}
+                  key={String(donor.ID || donor.Donor_ID || index)}
                   donor={donor}
                   onView={setProfileDonor}
+                  onEdit={setEditingDonor}
                   style={{ animationDelay: `${Math.min(index, 14) * 25}ms` }}
                 />
               ))}
@@ -488,6 +496,13 @@ export default function DonorsPage() {
         open={Boolean(profileDonor)}
         donor={profileDonor}
         onClose={() => setProfileDonor(null)}
+        onEdit={setEditingDonor}
+      />
+      <EditDonorModal
+        open={Boolean(editingDonor)}
+        donor={editingDonor}
+        onClose={() => setEditingDonor(null)}
+        onUpdated={() => loadDonors({ silent: true })}
       />
     </div>
   );
