@@ -47,7 +47,7 @@ function Field({ id, label, required, children }) {
 export default function RegisterDonorModal({ open, onClose, onRegistered }) {
   const { addDonor } = useDonors();
   const [form, setForm] = useState(initialForm);
-  const [certificateFile, setCertificateFile] = useState(null);
+  const [certificates, setCertificates] = useState([]);
   const [phase, setPhase] = useState('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [result, setResult] = useState(null);
@@ -59,7 +59,7 @@ export default function RegisterDonorModal({ open, onClose, onRegistered }) {
 
   const resetAndClose = () => {
     setForm(initialForm);
-    setCertificateFile(null);
+    setCertificates([]);
     setPhase('idle');
     setErrorMessage('');
     setResult(null);
@@ -71,6 +71,17 @@ export default function RegisterDonorModal({ open, onClose, onRegistered }) {
     setPhase('submitting');
     setErrorMessage('');
     try {
+      const certificateFiles = certificates
+        .filter((c) => c.type === 'file')
+        .map((c) => ({
+          data: c.fileData,
+          name: c.fileName,
+          type: c.fileType,
+        }));
+      const certificateUrls = certificates
+        .filter((c) => c.type === 'url')
+        .map((c) => c.url);
+
       const payload = {
         // Compatibility snake_case keys
         Full_Name: form.Name.trim(),
@@ -84,12 +95,9 @@ export default function RegisterDonorModal({ open, onClose, onRegistered }) {
         Last_Donated_Date: form['Last Donated Date'],
         Last_Donation_Type: form['Last Donation Type'],
         Last_Donation_Venue: form['Last Donation Venue'].trim(),
-        Certificate_URL: form['Certificate URL'].trim(),
-        certificateFile: certificateFile ? {
-          data: certificateFile.data,
-          name: certificateFile.name,
-          type: certificateFile.type
-        } : null,
+        Certificate_URL: certificateUrls.join(', '),
+        certificateUrls: certificateUrls,
+        certificateFiles: certificateFiles,
 
         // Canonical keys
         Name: form.Name.trim(),
@@ -101,7 +109,7 @@ export default function RegisterDonorModal({ open, onClose, onRegistered }) {
         'Last Donated Date': form['Last Donated Date'],
         'Last Donation Type': form['Last Donation Type'],
         'Last Donation Venue': form['Last Donation Venue'].trim(),
-        'Certificate URL': form['Certificate URL'].trim(),
+        'Certificate URL': certificateUrls.join(', '),
       };
       const data = await addDonor(payload);
       setResult(data);
@@ -348,10 +356,8 @@ export default function RegisterDonorModal({ open, onClose, onRegistered }) {
 
             <div className="sm:col-span-2">
               <CertificateUploader
-                certificateUrl={form['Certificate URL']}
-                onUrlChange={(url) => setForm((prev) => ({ ...prev, 'Certificate URL': url }))}
-                certificateFile={certificateFile}
-                onFileChange={setCertificateFile}
+                certificates={certificates}
+                onChange={setCertificates}
               />
             </div>
           </div>

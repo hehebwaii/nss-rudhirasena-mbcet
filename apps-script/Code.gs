@@ -257,59 +257,83 @@ function doPost(e) {
     const lastDonated = reqDate_(body['Last Donated Date'] || body.Last_Donated_Date, 'Last Donated Date');
     const donationType = reqEnum_(body['Last Donation Type'] || body.Last_Donation_Type, DONATION_TYPES, 'Last Donation Type');
     const venue = optStr_(body['Last Donation Venue'] || body.Last_Donation_Venue, 150);
-    let certUrl = optUrl_(body['Certificate URL'] || body.Certificate_URL);
+    // Collect all certificate URLs (both existing links and newly uploaded files)
+    const finalCertUrls = [];
 
-    // Handle Certificate File Upload directly from Device to Google Drive
-    if (body.certificateFile && typeof body.certificateFile === 'object') {
+    // 1. Existing URLs passed as array or delimited string
+    if (Array.isArray(body.certificateUrls)) {
+      body.certificateUrls.forEach((u) => {
+        const cleaned = optUrl_(u);
+        if (cleaned && !finalCertUrls.includes(cleaned)) finalCertUrls.push(cleaned);
+      });
+    } else if (body['Certificate URL'] || body.Certificate_URL) {
+      const rawUrls = String(body['Certificate URL'] || body.Certificate_URL).split(/[\n,;]+/);
+      rawUrls.forEach((u) => {
+        const cleaned = optUrl_(u);
+        if (cleaned && !finalCertUrls.includes(cleaned)) finalCertUrls.push(cleaned);
+      });
+    }
+
+    // 2. Newly uploaded files (array of files or single file)
+    const filesToUpload = [];
+    if (Array.isArray(body.certificateFiles)) {
+      filesToUpload.push(...body.certificateFiles);
+    } else if (body.certificateFile && typeof body.certificateFile === 'object') {
+      filesToUpload.push(body.certificateFile);
+    }
+
+    if (filesToUpload.length > 0) {
       try {
-        const fileObj = body.certificateFile;
-        const rawData = String(fileObj.data || fileObj.base64 || '');
-        if (rawData) {
-          const base64Str = rawData.includes('base64,') ? rawData.split('base64,')[1] : rawData;
-          const mimeType = String(fileObj.type || fileObj.mimeType || 'application/pdf').toLowerCase();
-          
-          const ALLOWED_MIME = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
-          if (ALLOWED_MIME.includes(mimeType)) {
-            // Determine file extension
-            let extension = '';
-            if (fileObj.name && fileObj.name.includes('.')) {
-              extension = '.' + fileObj.name.split('.').pop().toLowerCase();
-            } else {
-              if (mimeType.includes('pdf')) extension = '.pdf';
-              else if (mimeType.includes('png')) extension = '.png';
-              else if (mimeType.includes('webp')) extension = '.webp';
-              else extension = '.jpg';
-            }
-
-            // Name file after the donor
-            const cleanDonorName = String(name || id || 'Donor')
-              .trim()
-              .replace(/[/\\?%*:|"<>]/g, '')
-              .replace(/\s+/g, ' ');
-
-            const finalFileName = cleanDonorName + extension;
-
-            const decoded = Utilities.base64Decode(base64Str);
-            const blob = Utilities.newBlob(decoded, mimeType, finalFileName);
-
-            // Get or create "NSS Rudhirasena Certificates" folder in Google Drive
-            let folder;
-            const folders = DriveApp.getFoldersByName('NSS Rudhirasena Certificates');
-            if (folders.hasNext()) {
-              folder = folders.next();
-            } else {
-              folder = DriveApp.createFolder('NSS Rudhirasena Certificates');
-            }
-
-            const driveFile = folder.createFile(blob);
-            driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-            certUrl = driveFile.getUrl();
-          }
+        let folder;
+        const folders = DriveApp.getFoldersByName('NSS Rudhirasena Certificates');
+        if (folders.hasNext()) {
+          folder = folders.next();
+        } else {
+          folder = DriveApp.createFolder('NSS Rudhirasena Certificates');
         }
+
+        const ALLOWED_MIME = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+        const cleanDonorName = String(name || id || 'Donor')
+          .trim()
+          .replace(/[/\\?%*:|"<>]/g, '')
+          .replace(/\s+/g, ' ');
+
+        filesToUpload.forEach((fileObj, idx) => {
+          const rawData = String(fileObj.data || fileObj.base64 || '');
+          if (!rawData) return;
+
+          const base64Str = rawData.includes('base64,') ? rawData.split('base64,')[1] : rawData;
+          let mimeType = String(fileObj.type || fileObj.mimeType || 'application/pdf').toLowerCase();
+          if (!ALLOWED_MIME.includes(mimeType)) mimeType = 'application/pdf';
+
+          let extension = '';
+          if (fileObj.name && fileObj.name.includes('.')) {
+            extension = '.' + fileObj.name.split('.').pop().toLowerCase();
+          } else {
+            if (mimeType.includes('pdf')) extension = '.pdf';
+            else if (mimeType.includes('png')) extension = '.png';
+            else if (mimeType.includes('webp')) extension = '.webp';
+            else extension = '.jpg';
+          }
+
+          // If multiple certificates, suffix with index number (e.g. "Rahul Sharma - Certificate 2.pdf")
+          const totalCertIndex = finalCertUrls.length + 1;
+          const suffix = (finalCertUrls.length > 0 || filesToUpload.length > 1) ? ` - Certificate ${totalCertIndex}` : '';
+          const finalFileName = `${cleanDonorName}${suffix}${extension}`;
+
+          const decoded = Utilities.base64Decode(base64Str);
+          const blob = Utilities.newBlob(decoded, mimeType, finalFileName);
+          const driveFile = folder.createFile(blob);
+          driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+          
+          finalCertUrls.push(driveFile.getUrl());
+        });
       } catch (uploadError) {
-        console.warn('Certificate upload note: ' + uploadError.message);
+        Logger.log('Drive multi-upload note: ' + uploadError.message);
       }
     }
+
+    const certUrl = finalCertUrls.join(', ');
 
     const nextEligibleDate = getNextEligibleDate_(donationType, gender, lastDonated);
 

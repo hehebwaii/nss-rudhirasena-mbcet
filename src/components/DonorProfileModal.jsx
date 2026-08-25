@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import Modal from './Modal';
 import StatusBadge from './StatusBadge';
-import { daysRemaining, formatShortDate, getEligibility } from '../utils/donor';
+import { daysRemaining, formatShortDate, getEligibility, getCertificateUrls } from '../utils/donor';
 
 const dateClass = {
   eligible: 'text-emerald-700',
@@ -33,9 +33,7 @@ export default function DonorProfileModal({ open, donor, onClose, onEdit }) {
       .slice(0, 2)
       .map((word) => word[0].toUpperCase())
       .join('') || '?';
-  const certificateUrl = donor['Certificate URL'] || donor.Certificate_URL
-    ? String(donor['Certificate URL'] || donor.Certificate_URL)
-    : '';
+  const certificateUrls = getCertificateUrls(donor);
   const contact = donor.Contact || donor.Contact_Number ? String(donor.Contact || donor.Contact_Number) : '';
   const digits = contact.replace(/[\s-]/g, '');
 
@@ -147,10 +145,10 @@ export default function DonorProfileModal({ open, donor, onClose, onEdit }) {
         </div>
       </dl>
 
-      {(contact || certificateUrl) && (
-        <div className="mt-6 grid grid-cols-1 gap-3 border-t border-slate-100 pt-5 sm:grid-cols-3">
-          {contact ? (
-            <>
+      {(contact || certificateUrls.length > 0) && (
+        <div className="mt-6 space-y-3 border-t border-slate-100 pt-5">
+          {contact && (
+            <div className="grid grid-cols-2 gap-3">
               <a
                 href={`tel:${digits}`}
                 className={`${actionClass} border-slate-300 text-slate-700 hover:border-red-300 hover:bg-red-50 hover:text-red-700 focus-visible:outline-red-600`}
@@ -167,19 +165,30 @@ export default function DonorProfileModal({ open, donor, onClose, onEdit }) {
                 <MessageCircle className="h-4 w-4" />
                 WhatsApp
               </a>
-            </>
-          ) : null}
-          {certificateUrl ? (
-            <a
-              href={certificateUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`${actionClass} border-slate-300 text-slate-700 hover:border-red-300 hover:bg-red-50 hover:text-red-700 focus-visible:outline-red-600`}
-            >
-              <ExternalLink className="h-4 w-4" />
-              Certificate
-            </a>
-          ) : null}
+            </div>
+          )}
+
+          {certificateUrls.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+              <p className="mb-2 text-xs font-bold text-slate-700">
+                Verified Donation Certificates ({certificateUrls.length})
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {certificateUrls.map((url, idx) => (
+                  <a
+                    key={idx}
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-700"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5 text-red-600" />
+                    Certificate {certificateUrls.length > 1 ? `#${idx + 1}` : ''}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

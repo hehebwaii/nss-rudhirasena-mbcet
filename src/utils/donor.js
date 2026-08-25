@@ -118,6 +118,25 @@ export function uniqueLocations(donors) {
 }
 
 /**
+ * Extracts array of certificate URLs for a donor (handles multiple comma/newline-separated URLs)
+ */
+export function getCertificateUrls(donor) {
+  if (!donor) return [];
+  const raw =
+    donor['Certificate URL'] ||
+    donor.Certificate_URL ||
+    donor.certificate_url ||
+    donor.Certificate ||
+    '';
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.filter(Boolean);
+  return String(raw)
+    .split(/[\n,;]+/)
+    .map((u) => u.trim())
+    .filter((u) => u.startsWith('http://') || u.startsWith('https://'));
+}
+
+/**
  * Normalizes donor records from any Google Sheet / Apps Script header format
  * to canonical properties expected by UI components.
  */
@@ -149,7 +168,6 @@ export function normalizeDonor(raw, index = 0) {
       rawDept = String(rawDept).replace(yearMatch[0], '').replace(/[-–—/()]/g, '').trim();
     }
   } else if (rawYear && rawDept) {
-    // If rawDept contains year repeated, clean it up
     const yearMatch = /(1st|2nd|3rd|4th|\b[1-4](?:st|nd|rd|th)?\b)\s*(?:year|yr)?/i.exec(String(rawDept));
     if (yearMatch) {
       rawDept = String(rawDept).replace(yearMatch[0], '').replace(/[-–—/()]/g, '').trim();

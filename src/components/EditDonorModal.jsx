@@ -9,7 +9,7 @@ import {
 import Modal from './Modal';
 import CertificateUploader from './CertificateUploader';
 import { useDonors } from '../context/DonorContext';
-import { BLOOD_GROUPS, YEARS, todayISO } from '../utils/donor';
+import { BLOOD_GROUPS, YEARS, getCertificateUrls, todayISO } from '../utils/donor';
 
 const DONATION_TYPES = ['Whole Blood', 'Platelets', 'Plasma'];
 const GENDERS = ['Male', 'Female'];
@@ -44,9 +44,8 @@ export default function EditDonorModal({ open, donor, onClose, onUpdated }) {
     'Last Donated Date': '',
     'Last Donation Type': '',
     'Last Donation Venue': '',
-    'Certificate URL': '',
   });
-  const [certificateFile, setCertificateFile] = useState(null);
+  const [certificates, setCertificates] = useState([]);
   const [phase, setPhase] = useState('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [result, setResult] = useState(null);
@@ -66,9 +65,11 @@ export default function EditDonorModal({ open, donor, onClose, onUpdated }) {
         'Last Donated Date': donor['Last Donated Date'] ? String(donor['Last Donated Date']).slice(0, 10) : '',
         'Last Donation Type': donor['Last Donation Type'] || '',
         'Last Donation Venue': donor['Last Donation Venue'] || '',
-        'Certificate URL': donor['Certificate URL'] ? String(donor['Certificate URL']) : '',
       });
-      setCertificateFile(null);
+
+      const existingUrls = getCertificateUrls(donor);
+      setCertificates(existingUrls.map((url) => ({ type: 'url', url })));
+
       setPhase('idle');
       setErrorMessage('');
       setResult(null);
@@ -88,6 +89,17 @@ export default function EditDonorModal({ open, donor, onClose, onUpdated }) {
     setErrorMessage('');
 
     try {
+      const certificateFiles = certificates
+        .filter((c) => c.type === 'file')
+        .map((c) => ({
+          data: c.fileData,
+          name: c.fileName,
+          type: c.fileType,
+        }));
+      const certificateUrls = certificates
+        .filter((c) => c.type === 'url')
+        .map((c) => c.url);
+
       const payload = {
         action: 'update',
         ID: donor.ID || donor.Donor_ID,
@@ -105,12 +117,9 @@ export default function EditDonorModal({ open, donor, onClose, onUpdated }) {
         Last_Donated_Date: form['Last Donated Date'],
         Last_Donation_Type: form['Last Donation Type'],
         Last_Donation_Venue: form['Last Donation Venue'].trim(),
-        Certificate_URL: form['Certificate URL'].trim(),
-        certificateFile: certificateFile ? {
-          data: certificateFile.data,
-          name: certificateFile.name,
-          type: certificateFile.type
-        } : null,
+        Certificate_URL: certificateUrls.join(', '),
+        certificateUrls: certificateUrls,
+        certificateFiles: certificateFiles,
 
         Name: form.Name.trim(),
         'Blood Group': form['Blood Group'],
@@ -121,7 +130,7 @@ export default function EditDonorModal({ open, donor, onClose, onUpdated }) {
         'Last Donated Date': form['Last Donated Date'],
         'Last Donation Type': form['Last Donation Type'],
         'Last Donation Venue': form['Last Donation Venue'].trim(),
-        'Certificate URL': form['Certificate URL'].trim(),
+        'Certificate URL': certificateUrls.join(', '),
       };
 
       const res = await updateDonor(donor.ID || donor.Donor_ID, payload);
@@ -363,10 +372,8 @@ export default function EditDonorModal({ open, donor, onClose, onUpdated }) {
 
             <div className="sm:col-span-2">
               <CertificateUploader
-                certificateUrl={form['Certificate URL']}
-                onUrlChange={(url) => setForm((prev) => ({ ...prev, 'Certificate URL': url }))}
-                certificateFile={certificateFile}
-                onFileChange={setCertificateFile}
+                certificates={certificates}
+                onChange={setCertificates}
               />
             </div>
           </div>

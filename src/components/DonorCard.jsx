@@ -1,13 +1,11 @@
 import { Edit3, ExternalLink, Eye, Phone } from 'lucide-react';
 import StatusBadge from './StatusBadge';
-import { daysRemaining, formatShortDate, getEligibility } from '../utils/donor';
+import { daysRemaining, formatShortDate, getEligibility, getCertificateUrls } from '../utils/donor';
 
 export default function DonorCard({ donor, onView, onEdit, style }) {
   const eligibility = getEligibility(donor);
   const daysLeft = daysRemaining(donor);
-  const certificateUrl = donor['Certificate URL'] || donor.Certificate_URL
-    ? String(donor['Certificate URL'] || donor.Certificate_URL)
-    : '';
+  const certificateUrls = getCertificateUrls(donor);
   const name = String(donor.Name || donor.Full_Name || donor.ID || 'Unnamed');
   const venue = donor['Last Donation Venue'] || donor.Last_Donation_Venue || '—';
 
@@ -77,17 +75,18 @@ export default function DonorCard({ donor, onView, onEdit, style }) {
           className="flex items-center gap-1"
           onClick={(event) => event.stopPropagation()}
         >
-          {certificateUrl ? (
+          {certificateUrls.length > 0 && (
             <a
-              href={certificateUrl}
+              href={certificateUrls[0]}
               target="_blank"
               rel="noopener noreferrer"
               aria-label={`Open certificate for ${name}`}
+              title={certificateUrls.length > 1 ? `View Certificate (1 of ${certificateUrls.length})` : 'View Certificate'}
               className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-slate-500 transition-colors duration-150 hover:bg-red-50 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
             >
               <ExternalLink className="h-4 w-4" />
             </a>
-          ) : null}
+          )}
           {onEdit && (
             <button
               type="button"
