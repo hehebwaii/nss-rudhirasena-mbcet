@@ -6,20 +6,30 @@ import {
   useMemo,
   useState,
 } from 'react';
-import { API_URL } from '../config';
+import { ADMIN_PASSCODE, API_URL } from '../config';
 import { normalizeDonor } from '../utils/donor';
+import { useAuth } from './AuthContext';
 
 const DonorContext = createContext(null);
 
-async function fetchDonors() {
-  const response = await fetch(API_URL);
-  if (!response.ok) {
-    throw new Error(`API responded with status ${response.status}`);
+async function fetchDonors(token) {
+  const url = new URL(API_URL);
+  if (token) {
+    url.searchParams.set('key', token);
+    url.searchParams.set('client_id', 'nss_web_app');
   }
+
+  const response = await fetch(url.toString());
+  if (response.status === 429) {
+    throw new Error('Rate limit reached: Too many requests. Please wait a minute.');
+  }
+  if (!response.ok) {
+    throw new Error(`API error (${response.status}): Could not retrieve donor data.`);
+  }
+
   const json = await response.json();
 
   let rawList = [];
-  // Handle both direct array format and { data: [...] } / { status: 'success', data: [...] } format
   if (Array.isArray(json)) {
     rawList = json;
   } else if (json && Array.isArray(json.data)) {
@@ -27,14 +37,14 @@ async function fetchDonors() {
   } else if (json && json.status === 'error') {
     throw new Error(json.error || 'Failed to fetch donor records from Google Sheets.');
   } else {
-    throw new Error('Unexpected API response format: received ' + JSON.stringify(json));
+    throw new Error('Unexpected API response format.');
   }
 
-  // Normalize all incoming records to canonical format
   return rawList.map((donor, idx) => normalizeDonor(donor, idx));
 }
 
 export function DonorProvider({ children }) {
+  const { authToken, isAuthenticated } = useAuth();
   const [donors, setDonors] = useState([]);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
@@ -47,7 +57,7 @@ export function DonorProvider({ children }) {
       setError('');
     }
     try {
-      const data = await fetchDonors();
+      const data = await fetchDonors(authToken || ADMIN_PASSCODE);
       setDonors(data);
       setLastUpdated(new Date());
       setStatus('success');
@@ -57,27 +67,40 @@ export function DonorProvider({ children }) {
         setStatus('error');
       }
     }
-  }, []);
+  }, [authToken]);
 
   const addDonor = useCallback(async (payload) => {
+    const fullPayload = {
+      action: 'register',
+      auth_token: authToken || ADMIN_PASSCODE,
+      ...payload,
+    };
+
     const response = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(fullPayload),
     });
-    if (!response.ok) {
-      throw new Error(`API responded with status ${response.status}`);
+
+    if (response.status === 429) {
+      throw new Error('Rate limit reached: Too many donor registrations. Please wait a minute.');
     }
+
+    if (!response.ok) {
+      throw new Error(`Server returned error status ${response.status}`);
+    }
+
     const data = await response.json();
     if (!data || data.success === false || data.status === 'error') {
       throw new Error((data && data.error) || 'Registration failed.');
     }
     return data;
-  }, []);
+  }, [authToken]);
 
   const updateDonor = useCallback(async (donorId, payload) => {
     const fullPayload = {
       action: 'update',
+      auth_token: authToken || ADMIN_PASSCODE,
       ID: donorId,
       Donor_ID: donorId,
       ...payload,
@@ -89,8 +112,12 @@ export function DonorProvider({ children }) {
       body: JSON.stringify(fullPayload),
     });
 
+    if (response.status === 429) {
+      throw new Error('Rate limit reached: Too many update requests. Please wait a minute.');
+    }
+
     if (!response.ok) {
-      throw new Error(`API responded with status ${response.status}`);
+      throw new Error(`Server returned error status ${response.status}`);
     }
 
     const data = await response.json();
@@ -111,11 +138,13 @@ export function DonorProvider({ children }) {
     );
 
     return data;
-  }, []);
+  }, [authToken]);
 
   useEffect(() => {
-    loadDonors();
-  }, [loadDonors]);
+    if (isAuthenticated) {
+      loadDonors();
+    }
+  }, [isAuthenticated, loadDonors]);
 
   const value = useMemo(
     () => ({ donors, status, error, lastUpdated, loadDonors, addDonor, updateDonor }),
