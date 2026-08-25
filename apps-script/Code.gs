@@ -333,6 +333,9 @@ function doPost(e) {
       'Last_Donation_Venue': sanitizeFormula_(venue),
       'Certificate URL': sanitizeFormula_(certUrl),
       'Certificate_URL': sanitizeFormula_(certUrl),
+      'Certificate': sanitizeFormula_(certUrl),
+      'Certificate Link': sanitizeFormula_(certUrl),
+      'Cert URL': sanitizeFormula_(certUrl),
       'Next Eligible Date': nextEligibleDate,
       'Next_Eligible_Date': nextEligibleDate
     };
@@ -606,4 +609,25 @@ function jsonResponse_(payload) {
   return ContentService
     .createTextOutput(JSON.stringify(payload))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * Run this function ONCE in the Apps Script Editor to authorize Google Drive access!
+ * Click "Run" on this function -> Click "Review Permissions" -> Choose your Google Account -> Allow.
+ */
+function authorizeAndTestDrive() {
+  try {
+    let folder;
+    const folders = DriveApp.getFoldersByName('NSS Rudhirasena Certificates');
+    if (folders.hasNext()) {
+      folder = folders.next();
+    } else {
+      folder = DriveApp.createFolder('NSS Rudhirasena Certificates');
+    }
+    Logger.log('Drive permissions successfully authorized! Certificates Folder ID: ' + folder.getId());
+    return 'Google Drive integration is working and authorized!';
+  } catch (err) {
+    Logger.log('Drive Authorization required: ' + err.message);
+    throw err;
+  }
 }
