@@ -16,7 +16,7 @@ const ADMIN_API_KEY = 'rudhirasena';
 const RATE_LIMIT_READ_MAX = 60;   // Max 60 GET requests per minute per client
 const RATE_LIMIT_WRITE_MAX = 15;  // Max 15 POST mutations per minute per client
 const RATE_LIMIT_WINDOW_SEC = 60; // 1 minute sliding window
-const MAX_PAYLOAD_BYTES = 65536;  // Max 64 KB payload
+const MAX_PAYLOAD_BYTES = 10485760; // 10 MB payload for certificate file uploads
 
 const CANONICAL_HEADERS = [
   'ID',
@@ -257,7 +257,44 @@ function doPost(e) {
     const lastDonated = reqDate_(body['Last Donated Date'] || body.Last_Donated_Date, 'Last Donated Date');
     const donationType = reqEnum_(body['Last Donation Type'] || body.Last_Donation_Type, DONATION_TYPES, 'Last Donation Type');
     const venue = optStr_(body['Last Donation Venue'] || body.Last_Donation_Venue, 150);
-    const certUrl = optUrl_(body['Certificate URL'] || body.Certificate_URL);
+    let certUrl = optUrl_(body['Certificate URL'] || body.Certificate_URL);
+
+    // Handle Certificate File Upload directly from Device to Google Drive
+    if (body.certificateFile && typeof body.certificateFile === 'object') {
+      try {
+        const fileObj = body.certificateFile;
+        const rawData = String(fileObj.data || fileObj.base64 || '');
+        if (rawData) {
+          const base64Str = rawData.includes('base64,') ? rawData.split('base64,')[1] : rawData;
+          const mimeType = String(fileObj.type || fileObj.mimeType || 'application/pdf').toLowerCase();
+          
+          const ALLOWED_MIME = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+          if (ALLOWED_MIME.includes(mimeType)) {
+            const safeDonorId = String(id).replace(/[^a-zA-Z0-9_-]/g, '');
+            const rawFileName = String(fileObj.name || (safeDonorId + '_Certificate')).replace(/[^a-zA-Z0-9._-]/g, '_');
+            const finalFileName = safeDonorId + '_' + rawFileName;
+
+            const decoded = Utilities.base64Decode(base64Str);
+            const blob = Utilities.newBlob(decoded, mimeType, finalFileName);
+
+            // Get or create "NSS Rudhirasena Certificates" folder in Google Drive
+            let folder;
+            const folders = DriveApp.getFoldersByName('NSS Rudhirasena Certificates');
+            if (folders.hasNext()) {
+              folder = folders.next();
+            } else {
+              folder = DriveApp.createFolder('NSS Rudhirasena Certificates');
+            }
+
+            const driveFile = folder.createFile(blob);
+            driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+            certUrl = driveFile.getUrl();
+          }
+        }
+      } catch (uploadError) {
+        console.warn('Certificate upload note: ' + uploadError.message);
+      }
+    }
 
     const nextEligibleDate = getNextEligibleDate_(donationType, gender, lastDonated);
 

@@ -7,6 +7,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import Modal from './Modal';
+import CertificateUploader from './CertificateUploader';
 import { useDonors } from '../context/DonorContext';
 import { BLOOD_GROUPS, YEARS, todayISO } from '../utils/donor';
 
@@ -45,7 +46,7 @@ export default function EditDonorModal({ open, donor, onClose, onUpdated }) {
     'Last Donation Venue': '',
     'Certificate URL': '',
   });
-
+  const [certificateFile, setCertificateFile] = useState(null);
   const [phase, setPhase] = useState('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [result, setResult] = useState(null);
@@ -67,6 +68,7 @@ export default function EditDonorModal({ open, donor, onClose, onUpdated }) {
         'Last Donation Venue': donor['Last Donation Venue'] || '',
         'Certificate URL': donor['Certificate URL'] ? String(donor['Certificate URL']) : '',
       });
+      setCertificateFile(null);
       setPhase('idle');
       setErrorMessage('');
       setResult(null);
@@ -104,6 +106,11 @@ export default function EditDonorModal({ open, donor, onClose, onUpdated }) {
         Last_Donation_Type: form['Last Donation Type'],
         Last_Donation_Venue: form['Last Donation Venue'].trim(),
         Certificate_URL: form['Certificate URL'].trim(),
+        certificateFile: certificateFile ? {
+          data: certificateFile.data,
+          name: certificateFile.name,
+          type: certificateFile.type
+        } : null,
 
         Name: form.Name.trim(),
         'Blood Group': form['Blood Group'],
@@ -355,17 +362,12 @@ export default function EditDonorModal({ open, donor, onClose, onUpdated }) {
             </div>
 
             <div className="sm:col-span-2">
-              <Field id="edit-certificate" label="Certificate URL (optional)">
-                <input
-                  id="edit-certificate"
-                  type="url"
-                  maxLength={500}
-                  value={form['Certificate URL']}
-                  onChange={setField('Certificate URL')}
-                  placeholder="https://drive.google.com/..."
-                  className={inputClass}
-                />
-              </Field>
+              <CertificateUploader
+                certificateUrl={form['Certificate URL']}
+                onUrlChange={(url) => setForm((prev) => ({ ...prev, 'Certificate URL': url }))}
+                certificateFile={certificateFile}
+                onFileChange={setCertificateFile}
+              />
             </div>
           </div>
 
