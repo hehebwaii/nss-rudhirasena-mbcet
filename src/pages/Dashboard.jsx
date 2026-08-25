@@ -64,6 +64,7 @@ export default function Dashboard({ onNavigateTab }) {
   const [selectedGroups, setSelectedGroups] = useState([]);
   const [eligibility, setEligibility] = useState('all');
   const [gender, setGender] = useState('all');
+  const [selectedYear, setSelectedYear] = useState('all');
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [registerOpen, setRegisterOpen] = useState(false);
   const [profileDonor, setProfileDonor] = useState(null);
@@ -88,7 +89,7 @@ export default function Dashboard({ onNavigateTab }) {
     const query = search.trim().toLowerCase();
     return donors.filter((donor) => {
       if (query) {
-        const haystack = [donor.Name, donor.ID, donor.Contact, donor.Location]
+        const haystack = [donor.Name, donor.ID, donor.Contact, donor.Location, donor.Department, donor.Year]
           .map((value) => String(value ?? '').toLowerCase());
         if (!haystack.some((value) => value.includes(query))) return false;
       }
@@ -108,6 +109,12 @@ export default function Dashboard({ onNavigateTab }) {
         return false;
       }
       if (
+        selectedYear !== 'all' &&
+        String(donor.Year ?? '').toLowerCase() !== selectedYear.toLowerCase()
+      ) {
+        return false;
+      }
+      if (
         selectedLocation !== 'all' &&
         String(donor.Location ?? '')
           .trim()
@@ -117,13 +124,14 @@ export default function Dashboard({ onNavigateTab }) {
       }
       return true;
     });
-  }, [donors, search, selectedGroups, eligibility, gender, selectedLocation]);
+  }, [donors, search, selectedGroups, eligibility, gender, selectedYear, selectedLocation]);
 
   const activeCount = [
     search.trim() !== '',
     selectedGroups.length > 0,
     eligibility !== 'all',
     gender !== 'all',
+    selectedYear !== 'all',
     selectedLocation !== 'all',
   ].filter(Boolean).length;
 
@@ -132,6 +140,7 @@ export default function Dashboard({ onNavigateTab }) {
     setSelectedGroups([]);
     setEligibility('all');
     setGender('all');
+    setSelectedYear('all');
     setSelectedLocation('all');
   };
 
@@ -260,6 +269,8 @@ export default function Dashboard({ onNavigateTab }) {
             onEligibilityChange={setEligibility}
             gender={gender}
             onGenderChange={setGender}
+            year={selectedYear}
+            onYearChange={setSelectedYear}
             locations={locations}
             selectedLocation={selectedLocation}
             onLocationChange={setSelectedLocation}

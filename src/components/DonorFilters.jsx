@@ -1,5 +1,5 @@
 import { RotateCcw, Search } from 'lucide-react';
-import { BLOOD_GROUPS } from '../utils/donor';
+import { BLOOD_GROUPS, YEARS } from '../utils/donor';
 
 const ELIGIBILITY_OPTIONS = [
   { value: 'all', label: 'All' },
@@ -22,6 +22,8 @@ export default function DonorFilters({
   onEligibilityChange,
   gender,
   onGenderChange,
+  year,
+  onYearChange,
   locations,
   selectedLocation,
   onLocationChange,
@@ -84,7 +86,7 @@ export default function DonorFilters({
         </div>
       </fieldset>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <fieldset>
           <legend className={legendClass}>Eligibility</legend>
           <div
@@ -112,6 +114,25 @@ export default function DonorFilters({
               );
             })}
           </div>
+        </fieldset>
+
+        <fieldset>
+          <legend className={legendClass}>
+            <label htmlFor="filter-year">Year of Study</label>
+          </legend>
+          <select
+            id="filter-year"
+            value={year || 'all'}
+            onChange={(event) => onYearChange && onYearChange(event.target.value)}
+            className={selectClass}
+          >
+            <option value="all">All Years</option>
+            {YEARS.map((yr) => (
+              <option key={yr} value={yr}>
+                {yr}
+              </option>
+            ))}
+          </select>
         </fieldset>
 
         <fieldset>

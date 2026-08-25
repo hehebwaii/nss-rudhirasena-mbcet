@@ -24,6 +24,7 @@ const CANONICAL_HEADERS = [
   'Blood Group',
   'Contact',
   'Department',
+  'Year',
   'Age',
   'Weight',
   'Gender',
@@ -38,6 +39,7 @@ const CANONICAL_HEADERS = [
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 const GENDERS = ['Male', 'Female'];
 const DONATION_TYPES = ['Platelets', 'Whole Blood', 'Plasma'];
+const YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
 
 // Header dictionary mapping common variations to canonical header keys
 const HEADER_MAP = {
@@ -67,6 +69,12 @@ const HEADER_MAP = {
   'department_year': 'Department',
   'departmentyear': 'Department',
   'dept': 'Department',
+  'year': 'Year',
+  'year of study': 'Year',
+  'year_of_study': 'Year',
+  'yearofstudy': 'Year',
+  'batch': 'Year',
+  'academic year': 'Year',
   'age': 'Age',
   'weight': 'Weight',
   'weight (kg)': 'Weight',
@@ -226,6 +234,7 @@ function doPost(e) {
     const bloodGroup = reqEnum_(body['Blood Group'] || body.Blood_Group, BLOOD_GROUPS, 'Blood Group');
     const contact = reqContact_(body.Contact || body.Contact_Number || body.Phone);
     const department = reqStr_(body.Department || body.Department_Year, 'Department', 100);
+    const year = optStr_(body.Year || body.Year_of_Study || body.year || body.batch, 30);
     const age = reqNumber_(body.Age, 'Age', 16, 100);
     const weight = reqNumber_(body.Weight || body.Weight_kg, 'Weight', 25, 250);
     const gender = reqEnum_(body.Gender, GENDERS, 'Gender');
@@ -253,6 +262,8 @@ function doPost(e) {
       'Contact_Number': sanitizeFormula_(contact),
       'Department': sanitizeFormula_(department),
       'Department_Year': sanitizeFormula_(department),
+      'Year': sanitizeFormula_(year),
+      'Year_of_Study': sanitizeFormula_(year),
       'Age': age,
       'Weight': weight,
       'Weight_kg': weight,

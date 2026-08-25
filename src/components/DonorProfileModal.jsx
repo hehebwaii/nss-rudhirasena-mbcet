@@ -40,7 +40,11 @@ export default function DonorProfileModal({ open, donor, onClose, onEdit }) {
   const digits = contact.replace(/[\s-]/g, '');
 
   const fields = [
-    { icon: Building2, label: 'Department', value: donor.Department || donor.Department_Year },
+    {
+      icon: Building2,
+      label: 'Department & Year',
+      value: [donor.Department || donor.Department_Year, donor.Year].filter(Boolean).join(' · '),
+    },
     {
       icon: Activity,
       label: 'Age · Gender',
@@ -55,14 +59,14 @@ export default function DonorProfileModal({ open, donor, onClose, onEdit }) {
     },
     { icon: MapPin, label: 'Location', value: donor.Location || donor.District_Location },
     {
-      icon: Droplet,
-      label: 'Last Donation Type',
-      value: donor['Last Donation Type'] || donor.Last_Donation_Type,
-    },
-    {
       icon: MapPin,
       label: 'Last Donation Venue',
       value: donor['Last Donation Venue'] || donor.Last_Donation_Venue,
+    },
+    {
+      icon: Droplet,
+      label: 'Last Donation Type',
+      value: donor['Last Donation Type'] || donor.Last_Donation_Type,
     },
     {
       icon: CalendarDays,

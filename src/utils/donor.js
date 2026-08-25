@@ -1,4 +1,5 @@
 export const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+export const YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
 
 const MS_PER_DAY = 86400000;
 
@@ -86,6 +87,17 @@ export function normalizeGroup(value) {
   return String(value == null ? '' : value).trim().toUpperCase();
 }
 
+export function normalizeYear(value) {
+  if (!value) return '';
+  const str = String(value).trim();
+  const lower = str.toLowerCase();
+  if (lower.includes('1') || lower.includes('first')) return '1st Year';
+  if (lower.includes('2') || lower.includes('second')) return '2nd Year';
+  if (lower.includes('3') || lower.includes('third')) return '3rd Year';
+  if (lower.includes('4') || lower.includes('fourth') || lower.includes('final')) return '4th Year';
+  return str;
+}
+
 export function uniqueLocations(donors) {
   const seen = new Map();
   (donors || []).forEach((donor) => {
@@ -125,7 +137,21 @@ export function normalizeDonor(raw, index = 0) {
   const name = pick('Name', 'Full_Name', 'full_name', 'FullName', 'Donor_Name', 'name', 'Full Name');
   const bloodGroup = pick('Blood Group', 'Blood_Group', 'blood_group', 'BloodGroup', 'bloodGroup', 'Group');
   const contact = pick('Contact', 'Contact_Number', 'contact_number', 'ContactNumber', 'Phone', 'phone', 'Mobile', 'mobile', 'Contact Number');
-  const department = pick('Department', 'Department_Year', 'department_year', 'DepartmentYear', 'Dept', 'dept', 'Department / Year');
+  
+  let rawDept = pick('Department', 'Department_Year', 'department_year', 'DepartmentYear', 'Dept', 'dept', 'Department / Year');
+  let rawYear = pick('Year', 'Year_of_Study', 'year_of_study', 'YearOfStudy', 'year', 'Batch', 'batch', 'Year / Batch');
+
+  // If year is not separately defined but embedded in department (e.g. "CS 3rd Year")
+  if (!rawYear && rawDept) {
+    const yearMatch = /(1st|2nd|3rd|4th|\b[1-4]\b)\s*(year|yr)?/i.exec(rawDept);
+    if (yearMatch) {
+      rawYear = normalizeYear(yearMatch[0]);
+      rawDept = rawDept.replace(yearMatch[0], '').replace(/[-–—/]/g, '').trim();
+    }
+  }
+
+  const year = normalizeYear(rawYear);
+  const department = rawDept || 'General';
   const age = raw.Age ?? raw.age ?? '';
   const weight = raw.Weight ?? raw.Weight_kg ?? raw.weight_kg ?? raw.weight ?? raw['Weight (kg)'] ?? '';
   const gender = pick('Gender', 'gender', 'Sex', 'sex');
@@ -143,6 +169,7 @@ export function normalizeDonor(raw, index = 0) {
     'Blood Group': bloodGroup,
     Contact: contact,
     Department: department,
+    Year: year,
     Age: age !== '' ? Number(age) : '',
     Weight: weight !== '' ? Number(weight) : '',
     Gender: gender,

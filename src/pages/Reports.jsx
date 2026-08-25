@@ -58,6 +58,7 @@ export default function Reports() {
     });
 
     const deptCounts = {};
+    const yearCounts = { '1st Year': 0, '2nd Year': 0, '3rd Year': 0, '4th Year': 0, Other: 0 };
     const locCounts = {};
     const typeCounts = { 'Whole Blood': 0, Platelets: 0, Plasma: 0, Other: 0 };
     const genderCounts = { Male: 0, Female: 0, Other: 0 };
@@ -83,6 +84,14 @@ export default function Reports() {
       const dept = String(d.Department || 'Unspecified').trim();
       if (dept) {
         deptCounts[dept] = (deptCounts[dept] || 0) + 1;
+      }
+
+      // Year
+      const yr = String(d.Year || '').trim();
+      if (yr && yearCounts[yr] !== undefined) {
+        yearCounts[yr]++;
+      } else if (yr) {
+        yearCounts.Other++;
       }
 
       // Location
@@ -120,6 +129,7 @@ export default function Reports() {
       groupCounts,
       groupEligible,
       sortedDepts,
+      yearCounts,
       sortedLocs,
       typeCounts,
       genderCounts,
@@ -406,6 +416,31 @@ export default function Reports() {
 
         {/* Donation Types & Gender Balance */}
         <div className="space-y-6">
+          {/* Year of Study Distribution */}
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-card">
+            <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-red-600" />
+                <h3 className="font-bold text-slate-900">Year of Study Distribution</h3>
+              </div>
+              <span className="text-xs text-slate-400">Undergraduate batches</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {['1st Year', '2nd Year', '3rd Year', '4th Year'].map((yr) => {
+                const count = stats.yearCounts[yr] || 0;
+                const pct = stats.total > 0 ? Math.round((count / stats.total) * 100) : 0;
+                return (
+                  <div key={yr} className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-center">
+                    <p className="text-xs font-semibold text-slate-500">{yr}</p>
+                    <p className="tnum mt-1 text-2xl font-bold text-slate-900">{count}</p>
+                    <p className="text-[10px] text-slate-400">{pct}% of pool</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Donation Types */}
           <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-card">
             <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">

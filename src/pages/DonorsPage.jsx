@@ -22,6 +22,7 @@ import RegisterDonorModal from '../components/RegisterDonorModal';
 import EditDonorModal from '../components/EditDonorModal';
 import {
   BLOOD_GROUPS,
+  YEARS,
   getEligibility,
   normalizeGroup,
   uniqueLocations,
@@ -35,6 +36,7 @@ export default function DonorsPage() {
   const [selectedGroups, setSelectedGroups] = useState([]);
   const [eligibility, setEligibility] = useState('all');
   const [gender, setGender] = useState('all');
+  const [selectedYear, setSelectedYear] = useState('all');
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [selectedDept, setSelectedDept] = useState('all');
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'grid'
@@ -75,6 +77,7 @@ export default function DonorsPage() {
           donor.ID,
           donor.Contact,
           donor.Department,
+          donor.Year,
           donor.Location,
           donor['Blood Group'],
         ].map((value) => String(value ?? '').toLowerCase());
@@ -96,6 +99,12 @@ export default function DonorsPage() {
         return false;
       }
       if (
+        selectedYear !== 'all' &&
+        String(donor.Year ?? '').toLowerCase() !== selectedYear.toLowerCase()
+      ) {
+        return false;
+      }
+      if (
         selectedLocation !== 'all' &&
         String(donor.Location ?? '').trim().toLowerCase() !== selectedLocation.toLowerCase()
       ) {
@@ -109,13 +118,14 @@ export default function DonorsPage() {
       }
       return true;
     });
-  }, [donors, search, selectedGroups, eligibility, gender, selectedLocation, selectedDept]);
+  }, [donors, search, selectedGroups, eligibility, gender, selectedYear, selectedLocation, selectedDept]);
 
   const activeCount = [
     search.trim() !== '',
     selectedGroups.length > 0,
     eligibility !== 'all',
     gender !== 'all',
+    selectedYear !== 'all',
     selectedLocation !== 'all',
     selectedDept !== 'all',
   ].filter(Boolean).length;
@@ -125,6 +135,7 @@ export default function DonorsPage() {
     setSelectedGroups([]);
     setEligibility('all');
     setGender('all');
+    setSelectedYear('all');
     setSelectedLocation('all');
     setSelectedDept('all');
   };
@@ -327,7 +338,7 @@ export default function DonorsPage() {
           </div>
 
           {/* Dropdown Filters Grid */}
-          <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 sm:grid-cols-5">
             <div>
               <label className="mb-1 block text-xs font-semibold text-slate-500">
                 Eligibility
@@ -340,6 +351,24 @@ export default function DonorsPage() {
                 <option value="all">All Donors</option>
                 <option value="eligible">Eligible Now</option>
                 <option value="cooling">Cooling Period</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">
+                Year of Study
+              </label>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-medium text-slate-700 outline-none transition-colors hover:border-slate-300 focus:border-red-500"
+              >
+                <option value="all">All Years</option>
+                {YEARS.map((yr) => (
+                  <option key={yr} value={yr}>
+                    {yr}
+                  </option>
+                ))}
               </select>
             </div>
 

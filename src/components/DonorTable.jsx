@@ -5,9 +5,10 @@ import { daysRemaining, formatShortDate, getEligibility } from '../utils/donor';
 const COLUMNS = [
   'Donor',
   'Blood Group',
+  'Dept · Year',
   'Age · Gender',
   'Location',
-  'Last Donation',
+  'Last Donation Venue',
   'Next Eligible Date',
   'Actions',
 ];
@@ -48,6 +49,8 @@ export default function DonorTable({ donors, onView, onEdit }) {
               ? String(donor['Certificate URL'] || donor.Certificate_URL)
               : '';
             const name = String(donor.Name || donor.Full_Name || donor.ID || 'Unnamed');
+            const venue = donor['Last Donation Venue'] || donor.Last_Donation_Venue || '—';
+
             return (
               <tr
                 key={String(donor.ID || donor.Donor_ID || index)}
@@ -77,16 +80,26 @@ export default function DonorTable({ donors, onView, onEdit }) {
                     {donor['Blood Group'] || donor.Blood_Group || '—'}
                   </span>
                 </td>
+                <td className="px-4 py-3">
+                  <p className="font-medium text-slate-800 truncate max-w-[9rem]">
+                    {donor.Department || '—'}
+                  </p>
+                  {donor.Year && (
+                    <span className="inline-block mt-0.5 text-xs font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-md">
+                      {donor.Year}
+                    </span>
+                  )}
+                </td>
                 <td className="tnum whitespace-nowrap px-4 py-3 font-medium text-slate-700">
                   {donor.Age != null && donor.Age !== '' ? `${donor.Age} · ` : ''}
                   {donor.Gender || '—'}
                 </td>
-                <td className="max-w-[10rem] truncate px-4 py-3 text-slate-600">
+                <td className="max-w-[9rem] truncate px-4 py-3 text-slate-600">
                   {donor.Location || donor.District_Location || '—'}
                 </td>
-                <td className="px-4 py-3">
-                  <p className="font-medium text-slate-700">
-                    {donor['Last Donation Type'] || donor.Last_Donation_Type || '—'}
+                <td className="px-4 py-3 max-w-[11rem]">
+                  <p className="font-medium text-slate-700 truncate" title={venue}>
+                    {venue}
                   </p>
                   <p className="tnum mt-0.5 text-xs text-slate-400">
                     {formatShortDate(donor['Last Donated Date'] || donor.Last_Donated_Date)}

@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import Modal from './Modal';
 import { useDonors } from '../context/DonorContext';
-import { BLOOD_GROUPS, todayISO } from '../utils/donor';
+import { BLOOD_GROUPS, YEARS, todayISO } from '../utils/donor';
 
 const DONATION_TYPES = ['Whole Blood', 'Platelets', 'Plasma'];
 const GENDERS = ['Male', 'Female'];
@@ -17,6 +17,7 @@ const initialForm = {
   'Blood Group': '',
   Contact: '',
   Department: '',
+  Year: '1st Year',
   Age: '',
   Weight: '',
   Gender: '',
@@ -68,14 +69,14 @@ export default function RegisterDonorModal({ open, onClose, onRegistered }) {
     setErrorMessage('');
     try {
       const payload = {
-        // Deployed Google Apps Script expected keys
+        // Compatibility snake_case keys
         Full_Name: form.Name.trim(),
         Blood_Group: form['Blood Group'],
         Contact_Number: form.Contact.replace(/[\s-]/g, ''),
-        Department_Year: form.Department.trim(),
-        Age: Number(form.Age),
+        Department_Year: form.Department.trim() + (form.Year ? ` - ${form.Year}` : ''),
+        Year_of_Study: form.Year,
+        Year: form.Year,
         Weight_kg: Number(form.Weight),
-        Gender: form.Gender,
         District_Location: form.Location.trim(),
         Last_Donated_Date: form['Last Donated Date'],
         Last_Donation_Type: form['Last Donation Type'],
@@ -213,6 +214,22 @@ export default function RegisterDonorModal({ open, onClose, onRegistered }) {
                 placeholder="e.g. Computer Science"
                 className={inputClass}
               />
+            </Field>
+
+            <Field id="reg-year" label="Year of Study" required>
+              <select
+                id="reg-year"
+                required
+                value={form.Year}
+                onChange={setField('Year')}
+                className={`${inputClass} cursor-pointer`}
+              >
+                {YEARS.map((yr) => (
+                  <option key={yr} value={yr}>
+                    {yr}
+                  </option>
+                ))}
+              </select>
             </Field>
 
             <Field id="reg-age" label="Age" required>

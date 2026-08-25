@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import Modal from './Modal';
 import { useDonors } from '../context/DonorContext';
-import { BLOOD_GROUPS, todayISO } from '../utils/donor';
+import { BLOOD_GROUPS, YEARS, todayISO } from '../utils/donor';
 
 const DONATION_TYPES = ['Whole Blood', 'Platelets', 'Plasma'];
 const GENDERS = ['Male', 'Female'];
@@ -35,6 +35,7 @@ export default function EditDonorModal({ open, donor, onClose, onUpdated }) {
     'Blood Group': '',
     Contact: '',
     Department: '',
+    Year: '1st Year',
     Age: '',
     Weight: '',
     Gender: '',
@@ -56,6 +57,7 @@ export default function EditDonorModal({ open, donor, onClose, onUpdated }) {
         'Blood Group': donor['Blood Group'] || donor.Blood_Group || '',
         Contact: donor.Contact ? String(donor.Contact) : '',
         Department: donor.Department || donor.Department_Year || '',
+        Year: donor.Year || donor.Year_of_Study || '1st Year',
         Age: donor.Age != null && donor.Age !== '' ? donor.Age : '',
         Weight: donor.Weight != null && donor.Weight !== '' ? donor.Weight : '',
         Gender: donor.Gender || '',
@@ -91,7 +93,9 @@ export default function EditDonorModal({ open, donor, onClose, onUpdated }) {
         Full_Name: form.Name.trim(),
         Blood_Group: form['Blood Group'],
         Contact_Number: form.Contact.replace(/[\s-]/g, ''),
-        Department_Year: form.Department.trim(),
+        Department_Year: form.Department.trim() + (form.Year ? ` - ${form.Year}` : ''),
+        Year_of_Study: form.Year,
+        Year: form.Year,
         Age: form.Age ? Number(form.Age) : '',
         Weight_kg: form.Weight ? Number(form.Weight) : '',
         Gender: form.Gender,
@@ -228,6 +232,22 @@ export default function EditDonorModal({ open, donor, onClose, onUpdated }) {
               />
             </Field>
 
+            <Field id="edit-year" label="Year of Study" required>
+              <select
+                id="edit-year"
+                required
+                value={form.Year}
+                onChange={setField('Year')}
+                className={`${inputClass} cursor-pointer`}
+              >
+                {YEARS.map((yr) => (
+                  <option key={yr} value={yr}>
+                    {yr}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
             <Field id="edit-age" label="Age" required>
               <input
                 id="edit-age"
@@ -251,7 +271,7 @@ export default function EditDonorModal({ open, donor, onClose, onUpdated }) {
                 max={250}
                 value={form.Weight}
                 onChange={setField('Weight')}
-                placeholder="55"
+                placeholder="65"
                 className={inputClass}
               />
             </Field>
@@ -275,7 +295,7 @@ export default function EditDonorModal({ open, donor, onClose, onUpdated }) {
               </select>
             </Field>
 
-            <Field id="edit-location" label="Location" required>
+            <Field id="edit-location" label="District / Location" required>
               <input
                 id="edit-location"
                 type="text"
@@ -283,31 +303,34 @@ export default function EditDonorModal({ open, donor, onClose, onUpdated }) {
                 maxLength={150}
                 value={form.Location}
                 onChange={setField('Location')}
-                placeholder="e.g. Kochi"
+                placeholder="e.g. Trivandrum"
                 className={inputClass}
               />
             </Field>
 
-            <Field id="edit-last-date" label="Last Donated Date">
+            <Field id="edit-last-donated" label="Last Donated Date" required>
               <input
-                id="edit-last-date"
+                id="edit-last-donated"
                 type="date"
+                required
                 max={todayISO()}
                 value={form['Last Donated Date']}
                 onChange={setField('Last Donated Date')}
-                className={`${inputClass} cursor-pointer`}
-              >
-              </input>
+                className={inputClass}
+              />
             </Field>
 
-            <Field id="edit-donation-type" label="Last Donation Type">
+            <Field id="edit-donation-type" label="Last Donation Type" required>
               <select
                 id="edit-donation-type"
+                required
                 value={form['Last Donation Type']}
                 onChange={setField('Last Donation Type')}
                 className={`${inputClass} cursor-pointer`}
               >
-                <option value="">None / Not Donated Yet</option>
+                <option value="" disabled>
+                  Select donation type
+                </option>
                 {DONATION_TYPES.map((type) => (
                   <option key={type} value={type}>
                     {type}
@@ -317,54 +340,60 @@ export default function EditDonorModal({ open, donor, onClose, onUpdated }) {
             </Field>
 
             <div className="sm:col-span-2">
-              <Field id="edit-venue" label="Last Donation Venue">
+              <Field id="edit-venue" label="Last Donation Venue" required>
                 <input
                   id="edit-venue"
                   type="text"
+                  required
                   maxLength={150}
                   value={form['Last Donation Venue']}
                   onChange={setField('Last Donation Venue')}
-                  placeholder="e.g. NSS Blood Donation Camp"
+                  placeholder="e.g. Medical College Blood Bank"
                   className={inputClass}
                 />
               </Field>
             </div>
 
             <div className="sm:col-span-2">
-              <Field id="edit-certificate" label="Certificate Link">
+              <Field id="edit-certificate" label="Certificate URL (optional)">
                 <input
                   id="edit-certificate"
                   type="url"
                   maxLength={500}
                   value={form['Certificate URL']}
                   onChange={setField('Certificate URL')}
-                  placeholder="https://drive.google.com/…"
+                  placeholder="https://drive.google.com/..."
                   className={inputClass}
                 />
               </Field>
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
+          <div className="mt-6 flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
             <button
               type="button"
               onClick={onClose}
               disabled={submitting}
-              className="cursor-pointer rounded-xl border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-slate-400 disabled:opacity-60"
+              className="cursor-pointer rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition-[color,background-color] duration-150 hover:bg-slate-50 disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="flex cursor-pointer items-center gap-2 rounded-xl bg-red-700 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-red-800 focus-visible:outline-2 focus-visible:outline-red-700 disabled:opacity-70"
+              className="flex cursor-pointer items-center gap-2 rounded-xl bg-red-700 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-[background-color,transform] duration-150 hover:bg-red-800 active:scale-[0.98] disabled:opacity-60"
             >
               {submitting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving...
+                </>
               ) : (
-                <Save className="h-4 w-4" />
+                <>
+                  <Save className="h-4 w-4" />
+                  Save Changes
+                </>
               )}
-              {submitting ? 'Saving Changes…' : 'Save Changes'}
             </button>
           </div>
         </form>

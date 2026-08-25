@@ -9,6 +9,7 @@ export default function DonorCard({ donor, onView, onEdit, style }) {
     ? String(donor['Certificate URL'] || donor.Certificate_URL)
     : '';
   const name = String(donor.Name || donor.Full_Name || donor.ID || 'Unnamed');
+  const venue = donor['Last Donation Venue'] || donor.Last_Donation_Venue || '—';
 
   return (
     <article
@@ -18,7 +19,10 @@ export default function DonorCard({ donor, onView, onEdit, style }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-bold text-slate-900">{name}</p>
-          <p className="tnum mt-0.5 truncate text-xs text-slate-400">{donor.ID || donor.Donor_ID}</p>
+          <p className="tnum mt-0.5 truncate text-xs text-slate-400">
+            {donor.ID || donor.Donor_ID}
+            {donor.Year ? ` · ${donor.Year}` : ''}
+          </p>
           {donor.Contact && (
             <p className="tnum mt-1 flex items-center gap-1 text-xs text-slate-500">
               <Phone className="h-3 w-3" />
@@ -33,10 +37,10 @@ export default function DonorCard({ donor, onView, onEdit, style }) {
 
       <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
         <div>
-          <dt className="text-slate-400">Age · Gender</dt>
-          <dd className="tnum mt-0.5 font-medium text-slate-700">
-            {donor.Age != null && donor.Age !== '' ? `${donor.Age} · ` : ''}
-            {donor.Gender || '—'}
+          <dt className="text-slate-400">Dept · Year</dt>
+          <dd className="mt-0.5 truncate font-medium text-slate-700">
+            {donor.Department || '—'}
+            {donor.Year ? ` · ${donor.Year}` : ''}
           </dd>
         </div>
         <div>
@@ -46,10 +50,9 @@ export default function DonorCard({ donor, onView, onEdit, style }) {
           </dd>
         </div>
         <div>
-          <dt className="text-slate-400">Last Donation</dt>
-          <dd className="tnum mt-0.5 font-medium text-slate-700">
-            {donor['Last Donation Type'] || donor.Last_Donation_Type || '—'} ·{' '}
-            {formatShortDate(donor['Last Donated Date'] || donor.Last_Donated_Date)}
+          <dt className="text-slate-400">Last Donation Venue</dt>
+          <dd className="mt-0.5 truncate font-medium text-slate-700" title={venue}>
+            {venue} · {formatShortDate(donor['Last Donated Date'] || donor.Last_Donated_Date)}
           </dd>
         </div>
         <div>
