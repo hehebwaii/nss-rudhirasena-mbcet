@@ -1,0 +1,54 @@
+{
+  "name": "NSS Rudhirasena Blood Donor Directory",
+  "short_name": "Rudhirasena",
+  "description": "NSS Blood Donor Directory & Donation Operations Center · MBCET Units 230 & 706",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#b91c1c",
+  "scope": "/",
+  "categories": ["medical", "health", "utilities"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Emergency Dispatch",
+      "short_name": "Emergency",
+      "description": "Quick access to active emergency blood requests",
+      "url": "/?tab=operations",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Donor Directory",
+      "short_name": "Directory",
+      "description": "Search donors by blood group and location",
+      "url": "/?tab=donors",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

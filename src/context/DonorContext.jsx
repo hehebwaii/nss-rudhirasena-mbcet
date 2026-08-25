@@ -173,6 +173,38 @@ export function DonorProvider({ children }) {
     }
   }, [addDonor]);
 
+  const syncDriveCertificates = useCallback(async (folderUrl) => {
+    const fullPayload = {
+      action: 'sync_drive_certificates',
+      sessionToken: authToken,
+      auth_token: authToken,
+      folderUrl: folderUrl,
+    };
+
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(fullPayload),
+    });
+
+    if (response.status === 429) {
+      throw new Error('Rate limit reached: Please wait a minute before syncing again.');
+    }
+
+    if (!response.ok) {
+      throw new Error(`Server returned error status ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (data && (data.status === 'error' || data.success === false)) {
+      throw new Error(data.error || 'Failed to sync Drive certificates.');
+    }
+
+    // Reload donors to reflect matched certificate URLs
+    await loadDonors({ silent: true });
+    return data;
+  }, [authToken, loadDonors]);
+
   useEffect(() => {
     if (isAuthenticated) {
       loadDonors();
@@ -189,8 +221,9 @@ export function DonorProvider({ children }) {
       addDonor,
       updateDonor,
       batchAddOrUpdateDonors,
+      syncDriveCertificates,
     }),
-    [donors, status, error, lastUpdated, loadDonors, addDonor, updateDonor, batchAddOrUpdateDonors]
+    [donors, status, error, lastUpdated, loadDonors, addDonor, updateDonor, batchAddOrUpdateDonors, syncDriveCertificates]
   );
 
   return <DonorContext.Provider value={value}>{children}</DonorContext.Provider>;

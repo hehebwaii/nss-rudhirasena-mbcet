@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import {
   User,
   Phone,
@@ -9,9 +10,11 @@ import {
   Edit3,
   ExternalLink,
   MessageCircle,
+  QrCode,
 } from 'lucide-react';
 import Modal from './Modal';
 import StatusBadge from './StatusBadge';
+import CooldownProgress from './CooldownProgress';
 import { daysRemaining, formatShortDate, getEligibility, getCertificateUrls } from '../utils/donor';
 
 const dateClass = {
@@ -20,12 +23,16 @@ const dateClass = {
   unknown: 'text-slate-500',
 };
 
-export default function DonorProfileModal({ open, donor, onClose, onEdit }) {
-  if (!open || !donor) return null;
+export default function DonorProfileModal({ open, donor, onClose, onEdit, onViewIdCard }) {
+  const lastDonorRef = useRef(donor);
+  if (donor) lastDonorRef.current = donor;
+  const activeDonor = donor || lastDonorRef.current;
 
-  const eligibility = getEligibility(donor);
-  const daysLeft = daysRemaining(donor);
-  const name = String(donor.Name || donor.Full_Name || donor.ID || 'Unnamed');
+  if (!activeDonor) return null;
+
+  const eligibility = getEligibility(activeDonor);
+  const daysLeft = daysRemaining(activeDonor);
+  const name = String(activeDonor.Name || activeDonor.Full_Name || activeDonor.ID || 'Unnamed');
   const initials =
     name
       .split(/\s+/)
@@ -33,43 +40,56 @@ export default function DonorProfileModal({ open, donor, onClose, onEdit }) {
       .slice(0, 2)
       .map((word) => word[0].toUpperCase())
       .join('') || '?';
-  const certificateUrls = getCertificateUrls(donor);
-  const contact = donor.Contact || donor.Contact_Number ? String(donor.Contact || donor.Contact_Number) : '';
+  const certificateUrls = getCertificateUrls(activeDonor);
+  const contact = activeDonor.Contact || activeDonor.Contact_Number ? String(activeDonor.Contact || activeDonor.Contact_Number) : '';
   const digits = contact.replace(/[\s-]/g, '');
+
+  const locationVal = activeDonor.Location || activeDonor.District_Location || activeDonor.district_location || activeDonor['District / Location'] || activeDonor.District || activeDonor.city || activeDonor.City || activeDonor.Place || '';
+  const weightVal = activeDonor.Weight != null && activeDonor.Weight !== '' && !isNaN(Number(activeDonor.Weight)) ? `${activeDonor.Weight} kg` : (activeDonor.Weight_kg ? `${activeDonor.Weight_kg} kg` : '');
 
   const fields = [
     {
       icon: Building2,
       label: 'Department & Year',
-      value: [donor.Department || donor.Department_Year, donor.Year].filter(Boolean).join(' · '),
+      value: [activeDonor.Department || activeDonor.Department_Year, activeDonor.Year].filter(Boolean).join(' · '),
     },
     {
       icon: Activity,
       label: 'Age · Gender',
       value:
         [
-          donor.Age != null && donor.Age !== '' ? donor.Age : null,
-          donor.Gender || null,
+          activeDonor.Age != null && activeDonor.Age !== '' ? `${activeDonor.Age} yrs` : null,
+          activeDonor.Gender || null,
         ]
           .filter(Boolean)
           .join(' · ') || '',
       tnum: true,
     },
-    { icon: MapPin, label: 'Location', value: donor.Location || donor.District_Location },
+    {
+      icon: Activity,
+      label: 'Weight',
+      value: weightVal || '—',
+      tnum: true,
+    },
+    {
+      icon: MapPin,
+      label: 'District / Location',
+      value: locationVal || '—',
+    },
     {
       icon: MapPin,
       label: 'Last Donation Venue',
-      value: donor['Last Donation Venue'] || donor.Last_Donation_Venue,
+      value: activeDonor['Last Donation Venue'] || activeDonor.Last_Donation_Venue || '—',
     },
     {
       icon: Droplet,
       label: 'Last Donation Type',
-      value: donor['Last Donation Type'] || donor.Last_Donation_Type,
+      value: activeDonor['Last Donation Type'] || activeDonor.Last_Donation_Type || '—',
     },
     {
       icon: CalendarDays,
       label: 'Last Donated Date',
-      value: formatShortDate(donor['Last Donated Date'] || donor.Last_Donated_Date),
+      value: formatShortDate(activeDonor['Last Donated Date'] || activeDonor.Last_Donated_Date),
       tnum: true,
     },
   ];
@@ -89,34 +109,58 @@ export default function DonorProfileModal({ open, donor, onClose, onEdit }) {
               {name}
             </h3>
             <p className="tnum mt-0.5 text-xs font-medium uppercase tracking-wide text-slate-400">
-              {donor.ID || donor.Donor_ID}
+              {activeDonor.ID || activeDonor.Donor_ID}
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="tnum inline-flex w-fit items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-bold text-red-700 ring-1 ring-inset ring-red-200">
                 <Droplet className="h-3 w-3" />
-                {donor['Blood Group'] || donor.Blood_Group || '—'}
+                {activeDonor['Blood Group'] || activeDonor.Blood_Group || '—'}
               </span>
               <StatusBadge eligibility={eligibility} daysLeft={daysLeft} />
             </div>
           </div>
         </div>
 
-        {onEdit && (
-          <button
-            type="button"
-            onClick={() => {
-              onClose();
-              onEdit(donor);
-            }}
-            className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-xs transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-red-600 active:scale-[0.98]"
-          >
-            <Edit3 className="h-3.5 w-3.5" />
-            <span>Edit</span>
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {onViewIdCard && (
+            <button
+              type="button"
+              onClick={() => {
+                onViewIdCard(activeDonor);
+              }}
+              className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-red-200 bg-red-50/70 px-3.5 py-2 text-xs font-bold text-red-700 shadow-xs transition-colors hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-red-600 active:scale-[0.98]"
+            >
+              <QrCode className="h-3.5 w-3.5" />
+              <span>Digital ID Card</span>
+            </button>
+          )}
+
+          {onEdit && (
+            <button
+              type="button"
+              onClick={() => {
+                onEdit(activeDonor);
+              }}
+              className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-xs transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-red-600 active:scale-[0.98]"
+            >
+              <Edit3 className="h-3.5 w-3.5" />
+              <span>Edit</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      <dl className="mt-6 grid grid-cols-1 gap-x-6 gap-y-5 border-t border-slate-100 pt-5 sm:grid-cols-2">
+      {/* 90-Day Cooldown Meter (Shown during active cooldown) */}
+      {eligibility === 'cooling' && (
+        <div className="mt-5 rounded-2xl border border-orange-200 bg-orange-50/60 p-3.5">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-orange-800">
+            90-Day Donation Cooldown
+          </p>
+          <CooldownProgress donor={activeDonor} />
+        </div>
+      )}
+
+      <dl className="mt-5 grid grid-cols-1 gap-x-6 gap-y-5 border-t border-slate-100 pt-5 sm:grid-cols-2">
         {fields.map(({ icon: RowIcon, label, value, tnum }) => (
           <div key={label} className="flex items-start gap-3">
             <RowIcon className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
@@ -139,7 +183,7 @@ export default function DonorProfileModal({ open, donor, onClose, onEdit }) {
               Next Eligible Date
             </dt>
             <dd className={`tnum mt-0.5 text-sm font-bold ${dateClass[eligibility]}`}>
-              {formatShortDate(donor['Next Eligible Date'] || donor.Next_Eligible_Date)}
+              {formatShortDate(activeDonor['Next Eligible Date'] || activeDonor.Next_Eligible_Date)}
             </dd>
           </div>
         </div>
@@ -198,7 +242,7 @@ export default function DonorProfileModal({ open, donor, onClose, onEdit }) {
             type="button"
             onClick={() => {
               onClose();
-              onEdit(donor);
+              onEdit(activeDonor);
             }}
             className="flex cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-bold text-white transition-[background-color,transform] duration-150 hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-slate-900 active:scale-[0.98]"
           >

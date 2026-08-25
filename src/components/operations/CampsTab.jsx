@@ -7,6 +7,7 @@ import {
   FileSpreadsheet,
   MapPin,
   Plus,
+  QrCode,
   Search,
   Tent,
   Users,
@@ -16,6 +17,7 @@ import NewCampModal from './NewCampModal';
 import EditCampModal from './EditCampModal';
 import CampDetailsModal from './CampDetailsModal';
 import ImportCampRosterModal from './ImportCampRosterModal';
+import CampQRScannerModal from '../CampQRScannerModal';
 import { formatShortDate } from '../../utils/donor';
 import { CAMP_STATUS } from '../../utils/operations';
 
@@ -24,6 +26,8 @@ export default function CampsTab({ onRegisterNewDonor }) {
   const [statusFilter, setStatusFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [isNewCampOpen, setIsNewCampOpen] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [scannerCampId, setScannerCampId] = useState(null);
   const [selectedCampId, setSelectedCampId] = useState(null);
   const [selectedCampForEditId, setSelectedCampForEditId] = useState(null);
   const [selectedCampForImportId, setSelectedCampForImportId] = useState(null);
@@ -108,14 +112,28 @@ export default function CampsTab({ onRegisterNewDonor }) {
           />
         </div>
 
-        <button
-          type="button"
-          onClick={() => setIsNewCampOpen(true)}
-          className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-red-700 px-4 py-2 text-xs font-bold text-white shadow-xs transition-all hover:bg-red-800 active:scale-95"
-        >
-          <Plus className="h-4 w-4" />
-          Schedule New Camp Drive
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setScannerCampId(null);
+              setIsScannerOpen(true);
+            }}
+            className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2 text-xs font-bold text-red-700 shadow-xs transition-all hover:bg-red-100 active:scale-95"
+          >
+            <QrCode className="h-4 w-4 text-red-700" />
+            <span>Scan Donor QR</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsNewCampOpen(true)}
+            className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-red-700 px-4 py-2 text-xs font-bold text-white shadow-xs transition-all hover:bg-red-800 active:scale-95"
+          >
+            <Plus className="h-4 w-4" />
+            Schedule New Camp Drive
+          </button>
+        </div>
       </div>
 
       {/* Camps Cards Grid */}
@@ -210,6 +228,18 @@ export default function CampsTab({ onRegisterNewDonor }) {
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
+                      onClick={() => {
+                        setScannerCampId(camp.id);
+                        setIsScannerOpen(true);
+                      }}
+                      title="Quick Scan Donor QR Check-in for this Camp"
+                      className="flex cursor-pointer items-center gap-1 rounded-xl border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-700 hover:bg-red-100 active:scale-95 transition-colors"
+                    >
+                      <QrCode className="h-3.5 w-3.5" />
+                      <span>Scan QR</span>
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setSelectedCampForImportId(camp.id)}
                       title="Import Excel / Google Form Responses"
                       className="flex cursor-pointer items-center gap-1 rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100 active:scale-95 transition-colors"
@@ -274,6 +304,13 @@ export default function CampsTab({ onRegisterNewDonor }) {
           onRegisterNewDonor={onRegisterNewDonor}
         />
       )}
+
+      {/* Camp QR Scanner Modal */}
+      <CampQRScannerModal
+        open={isScannerOpen}
+        defaultCampId={scannerCampId}
+        onClose={() => setIsScannerOpen(false)}
+      />
     </div>
   );
 }

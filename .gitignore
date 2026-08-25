@@ -28,3 +28,12 @@ dist-ssr
 .env
 .env.*
 !.env.example
+
+# Local Data & Donor Spreadsheets (Safety Guard)
+*.xlsx
+*.xls
+*.csv
+
+# Agent/IDE local metadata
+.agents/
+.claude/

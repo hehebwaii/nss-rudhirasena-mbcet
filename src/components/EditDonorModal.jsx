@@ -9,7 +9,7 @@ import {
 import Modal from './Modal';
 import CertificateUploader from './CertificateUploader';
 import { useDonors } from '../context/DonorContext';
-import { BLOOD_GROUPS, YEARS, getCertificateUrls, todayISO } from '../utils/donor';
+import { BLOOD_GROUPS, YEARS, getCertificateUrls, normalizeYear, todayISO } from '../utils/donor';
 
 const DONATION_TYPES = ['Whole Blood', 'Platelets', 'Plasma'];
 const GENDERS = ['Male', 'Female'];
@@ -56,12 +56,15 @@ export default function EditDonorModal({ open, donor, onClose, onUpdated }) {
         Name: donor.Name || donor.Full_Name || '',
         'Blood Group': donor['Blood Group'] || donor.Blood_Group || '',
         Contact: donor.Contact ? String(donor.Contact) : '',
-        Department: donor.Department || donor.Department_Year || '',
-        Year: donor.Year || donor.Year_of_Study || '1st Year',
+        Department: (function() {
+          const dept = donor.Department || donor.Department_Year || '';
+          return dept.replace(/\s*[-–—]\s*(?:1st|2nd|3rd|4th|\b[1-4](?:st|nd|rd|th)?\b)\s*(?:year|yr)?/i, '').trim();
+        })(),
+        Year: normalizeYear(donor.Year || donor.Year_of_Study || donor.year_of_study || donor.year || '1st Year'),
         Age: donor.Age != null && donor.Age !== '' ? donor.Age : '',
         Weight: donor.Weight != null && donor.Weight !== '' ? donor.Weight : '',
         Gender: donor.Gender || '',
-        Location: donor.Location || donor.District_Location || '',
+        Location: donor.Location || donor.District_Location || donor.district_location || donor['District / Location'] || donor.District || donor.city || donor.City || donor.Place || '',
         'Last Donated Date': donor['Last Donated Date'] ? String(donor['Last Donated Date']).slice(0, 10) : '',
         'Last Donation Type': donor['Last Donation Type'] || '',
         'Last Donation Venue': donor['Last Donation Venue'] || '',
@@ -111,7 +114,7 @@ export default function EditDonorModal({ open, donor, onClose, onUpdated }) {
         Year_of_Study: form.Year,
         Year: form.Year,
         Age: form.Age ? Number(form.Age) : '',
-        Weight_kg: form.Weight ? Number(form.Weight) : '',
+        Weight_kg: form.Weight !== '' ? Number(form.Weight) : '',
         Gender: form.Gender,
         District_Location: form.Location.trim(),
         Last_Donated_Date: form['Last Donated Date'],
@@ -125,7 +128,7 @@ export default function EditDonorModal({ open, donor, onClose, onUpdated }) {
         'Blood Group': form['Blood Group'],
         Contact: form.Contact.replace(/[\s-]/g, ''),
         Department: form.Department.trim(),
-        Weight: form.Weight ? Number(form.Weight) : '',
+        Weight: form.Weight !== '' ? Number(form.Weight) : '',
         Location: form.Location.trim(),
         'Last Donated Date': form['Last Donated Date'],
         'Last Donation Type': form['Last Donation Type'],
@@ -278,16 +281,15 @@ export default function EditDonorModal({ open, donor, onClose, onUpdated }) {
               />
             </Field>
 
-            <Field id="edit-weight" label="Weight (kg)" required>
+            <Field id="edit-weight" label="Weight (kg)">
               <input
                 id="edit-weight"
                 type="number"
-                required
                 min={25}
                 max={250}
                 value={form.Weight}
                 onChange={setField('Weight')}
-                placeholder="65"
+                placeholder="e.g. 65 (optional)"
                 className={inputClass}
               />
             </Field>

@@ -21,6 +21,7 @@ export default function StatusBadge({ eligibility, daysLeft }) {
   if (eligibility === 'cooling' && Number.isFinite(daysLeft)) {
     label = daysLeft === 0 ? 'Cooling · last day' : `Cooling · ${daysLeft}d left`;
   }
+
   return (
     <span
       className={`inline-flex w-fit items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${STYLES[eligibility] || STYLES.unknown}`}

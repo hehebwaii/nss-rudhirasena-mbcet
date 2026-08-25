@@ -1,8 +1,9 @@
-import { Edit3, ExternalLink, Eye, Phone } from 'lucide-react';
+import { Edit3, ExternalLink, Eye, Phone, QrCode } from 'lucide-react';
 import StatusBadge from './StatusBadge';
+import CooldownProgress from './CooldownProgress';
 import { daysRemaining, formatShortDate, getEligibility, getCertificateUrls } from '../utils/donor';
 
-export default function DonorCard({ donor, onView, onEdit, style }) {
+export default function DonorCard({ donor, onView, onEdit, onViewIdCard, style }) {
   const eligibility = getEligibility(donor);
   const daysLeft = daysRemaining(donor);
   const certificateUrls = getCertificateUrls(donor);
@@ -44,7 +45,7 @@ export default function DonorCard({ donor, onView, onEdit, style }) {
         <div>
           <dt className="text-slate-400">Location</dt>
           <dd className="mt-0.5 truncate font-medium text-slate-700">
-            {donor.Location || donor.District_Location || '—'}
+            {donor.Location || donor.District_Location || donor.district_location || donor['District / Location'] || donor.District || donor.city || donor.City || '—'}
           </dd>
         </div>
         <div>
@@ -69,6 +70,13 @@ export default function DonorCard({ donor, onView, onEdit, style }) {
         </div>
       </dl>
 
+      {/* 90-Day Cooldown Meter (Visible during active cooldown) */}
+      {eligibility === 'cooling' && (
+        <div className="mt-3 rounded-xl bg-orange-50/60 p-2.5 ring-1 ring-orange-200/50">
+          <CooldownProgress donor={donor} />
+        </div>
+      )}
+
       <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
         <StatusBadge eligibility={eligibility} daysLeft={daysLeft} />
         <div
@@ -86,6 +94,17 @@ export default function DonorCard({ donor, onView, onEdit, style }) {
             >
               <ExternalLink className="h-4 w-4" />
             </a>
+          )}
+          {onViewIdCard && (
+            <button
+              type="button"
+              onClick={() => onViewIdCard(donor)}
+              aria-label={`View ID Card for ${name}`}
+              title="View Digital Donor ID Card"
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-slate-500 transition-colors duration-150 hover:bg-red-50 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 active:scale-95"
+            >
+              <QrCode className="h-4 w-4" />
+            </button>
           )}
           {onEdit && (
             <button

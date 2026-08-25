@@ -90,7 +90,7 @@ export default function RegisterDonorModal({ open, onClose, onRegistered }) {
         Department_Year: form.Department.trim() + (form.Year ? ` - ${form.Year}` : ''),
         Year_of_Study: form.Year,
         Year: form.Year,
-        Weight_kg: Number(form.Weight),
+        Weight_kg: form.Weight !== '' ? Number(form.Weight) : '',
         District_Location: form.Location.trim(),
         Last_Donated_Date: form['Last Donated Date'],
         Last_Donation_Type: form['Last Donation Type'],
@@ -104,7 +104,7 @@ export default function RegisterDonorModal({ open, onClose, onRegistered }) {
         'Blood Group': form['Blood Group'],
         Contact: form.Contact.replace(/[\s-]/g, ''),
         Department: form.Department.trim(),
-        Weight: Number(form.Weight),
+        Weight: form.Weight !== '' ? Number(form.Weight) : '',
         Location: form.Location.trim(),
         'Last Donated Date': form['Last Donated Date'],
         'Last Donation Type': form['Last Donation Type'],
@@ -262,16 +262,15 @@ export default function RegisterDonorModal({ open, onClose, onRegistered }) {
               />
             </Field>
 
-            <Field id="reg-weight" label="Weight (kg)" required>
+            <Field id="reg-weight" label="Weight (kg)">
               <input
                 id="reg-weight"
                 type="number"
-                required
                 min={25}
                 max={250}
                 value={form.Weight}
                 onChange={setField('Weight')}
-                placeholder="55"
+                placeholder="e.g. 55 (optional)"
                 className={inputClass}
               />
             </Field>

@@ -188,7 +188,7 @@ export async function parseExcelOrCsv(file) {
           const rawDept = headerMapping.department !== undefined ? row[headerMapping.department] : 'General';
           const rawYear = headerMapping.year !== undefined ? row[headerMapping.year] : '1st Year';
           const rawAge = headerMapping.age !== undefined ? Number(row[headerMapping.age]) : 20;
-          const rawWeight = headerMapping.weight !== undefined ? Number(row[headerMapping.weight]) : 60;
+          const rawWeight = headerMapping.weight !== undefined && row[headerMapping.weight] !== '' && !isNaN(Number(row[headerMapping.weight])) ? Number(row[headerMapping.weight]) : '';
           const rawGender = headerMapping.gender !== undefined ? row[headerMapping.gender] : 'Male';
           const rawLocation = headerMapping.location !== undefined ? row[headerMapping.location] : 'Trivandrum';
 
@@ -199,7 +199,7 @@ export async function parseExcelOrCsv(file) {
             department: String(rawDept || 'General').trim(),
             year: normalizeYear(rawYear) || '1st Year',
             age: rawAge >= 17 && rawAge <= 65 ? rawAge : 20,
-            weight: rawWeight >= 45 && rawWeight <= 200 ? rawWeight : 55,
+            weight: rawWeight !== '' && rawWeight >= 30 && rawWeight <= 200 ? rawWeight : '',
             gender: normalizeGender(rawGender),
             location: String(rawLocation || 'Trivandrum').trim(),
           });

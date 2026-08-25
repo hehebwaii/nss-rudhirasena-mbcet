@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import {
   Calendar,
   CheckCircle2,
@@ -22,6 +22,10 @@ import { useDonors } from '../../context/DonorContext';
 import { formatShortDate } from '../../utils/donor';
 
 export default function CampDetailsModal({ open, camp, onClose, onRegisterNewDonor }) {
+  const lastCampRef = useRef(camp);
+  if (camp) lastCampRef.current = camp;
+  const activeCamp = camp || lastCampRef.current;
+
   const { addDonorToCampRoster, removeDonorFromCampRoster, updateCamp } = useOperations();
   const { donors } = useDonors();
 
@@ -31,46 +35,46 @@ export default function CampDetailsModal({ open, camp, onClose, onRegisterNewDon
   const [isImportOpen, setIsImportOpen] = useState(false);
 
   const participatingDonors = useMemo(() => {
-    if (!camp || !camp.donorIds) return [];
+    if (!activeCamp || !activeCamp.donorIds) return [];
     return donors.filter((d) => {
       const id = d.ID || d.Donor_ID;
-      return camp.donorIds.includes(id);
+      return activeCamp.donorIds.includes(id);
     });
-  }, [camp, donors]);
+  }, [activeCamp, donors]);
 
   const availableDonors = useMemo(() => {
-    if (!camp) return [];
+    if (!activeCamp) return [];
     const q = donorSearch.toLowerCase().trim();
     return donors.filter((d) => {
       const id = d.ID || d.Donor_ID;
-      const notInCamp = !camp.donorIds.includes(id);
+      const notInCamp = !activeCamp.donorIds.includes(id);
       if (!notInCamp) return false;
       if (!q) return true;
       const name = String(d.Name || d.Full_Name || '').toLowerCase();
       const bg = String(d['Blood Group'] || '').toLowerCase();
       return name.includes(q) || id.toLowerCase().includes(q) || bg.includes(q);
     });
-  }, [donors, camp, donorSearch]);
+  }, [donors, activeCamp, donorSearch]);
 
-  if (!open || !camp) return null;
+  if (!activeCamp) return null;
 
-  const target = Number(camp.targetUnits) || 50;
-  const collected = Number(camp.collectedUnits) || participatingDonors.length;
+  const target = Number(activeCamp.targetUnits) || 50;
+  const collected = Number(activeCamp.collectedUnits) || participatingDonors.length;
   const percentage = Math.min(100, Math.round((collected / target) * 100));
 
   const handleAddDonor = async (donor) => {
-    await addDonorToCampRoster(camp.id, donor);
+    await addDonorToCampRoster(activeCamp.id, donor);
   };
 
   const handleRemoveDonor = async (donorId) => {
-    await removeDonorFromCampRoster(camp.id, donorId);
+    await removeDonorFromCampRoster(activeCamp.id, donorId);
   };
 
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title={camp.name}
+      title={activeCamp.name}
       maxWidth="max-w-3xl"
     >
       {/* Camp Header Details */}

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   Download,
   Filter,
+  FolderSync,
   Grid,
   List,
   Plus,
@@ -20,10 +21,13 @@ import DonorCard from '../components/DonorCard';
 import DonorProfileModal from '../components/DonorProfileModal';
 import RegisterDonorModal from '../components/RegisterDonorModal';
 import EditDonorModal from '../components/EditDonorModal';
+import DigitalDonorCardModal from '../components/DigitalDonorCardModal';
+import SyncDriveCertificatesModal from '../components/SyncDriveCertificatesModal';
 import {
   BLOOD_GROUPS,
   YEARS,
   getEligibility,
+  getEligibilityDetails,
   normalizeGroup,
   uniqueLocations,
 } from '../utils/donor';
@@ -41,8 +45,11 @@ export default function DonorsPage() {
   const [selectedDept, setSelectedDept] = useState('all');
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'grid'
   const [registerOpen, setRegisterOpen] = useState(false);
+  const [syncDriveOpen, setSyncDriveOpen] = useState(false);
   const [profileDonor, setProfileDonor] = useState(null);
   const [editingDonor, setEditingDonor] = useState(null);
+  const [idCardDonor, setIdCardDonor] = useState(null);
+  const [idCardFromProfile, setIdCardFromProfile] = useState(false);
 
   const locations = useMemo(() => uniqueLocations(donors), [donors]);
 
@@ -209,6 +216,15 @@ export default function DonorsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setSyncDriveOpen(true)}
+            className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-red-200 bg-red-50/70 px-3.5 py-2.5 text-sm font-bold text-red-700 transition-[color,background-color,border-color,transform] duration-150 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 active:scale-[0.98]"
+            title="Paste Google Drive folder link to automatically match and display certificates for donors"
+          >
+            <FolderSync className="h-4 w-4" />
+            <span className="hidden sm:inline">Link</span> Drive Folder
+          </button>
           <button
             type="button"
             onClick={exportCSV}
@@ -467,6 +483,7 @@ export default function DonorsPage() {
                 donors={filtered}
                 onView={setProfileDonor}
                 onEdit={setEditingDonor}
+                onViewIdCard={(d) => { setIdCardFromProfile(false); setIdCardDonor(d); }}
               />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:hidden">
                 {filtered.map((donor, index) => (
@@ -475,6 +492,7 @@ export default function DonorsPage() {
                     donor={donor}
                     onView={setProfileDonor}
                     onEdit={setEditingDonor}
+                    onViewIdCard={(d) => { setIdCardFromProfile(false); setIdCardDonor(d); }}
                     style={{ animationDelay: `${Math.min(index, 14) * 25}ms` }}
                   />
                 ))}
@@ -488,6 +506,7 @@ export default function DonorsPage() {
                   donor={donor}
                   onView={setProfileDonor}
                   onEdit={setEditingDonor}
+                  onViewIdCard={(d) => { setIdCardFromProfile(false); setIdCardDonor(d); }}
                   style={{ animationDelay: `${Math.min(index, 14) * 25}ms` }}
                 />
               ))}
@@ -525,13 +544,37 @@ export default function DonorsPage() {
         open={Boolean(profileDonor)}
         donor={profileDonor}
         onClose={() => setProfileDonor(null)}
-        onEdit={setEditingDonor}
+        onEdit={(d) => {
+          setProfileDonor(null);
+          setEditingDonor(d);
+        }}
+        onViewIdCard={(d) => {
+          setProfileDonor(null);
+          setIdCardFromProfile(true);
+          setIdCardDonor(d);
+        }}
       />
       <EditDonorModal
         open={Boolean(editingDonor)}
         donor={editingDonor}
         onClose={() => setEditingDonor(null)}
         onUpdated={() => loadDonors({ silent: true })}
+      />
+      <DigitalDonorCardModal
+        open={Boolean(idCardDonor)}
+        donor={idCardDonor}
+        onClose={() => {
+          const d = idCardDonor;
+          setIdCardDonor(null);
+          if (idCardFromProfile && d) {
+            setIdCardFromProfile(false);
+            setProfileDonor(d);
+          }
+        }}
+      />
+      <SyncDriveCertificatesModal
+        open={syncDriveOpen}
+        onClose={() => setSyncDriveOpen(false)}
       />
     </div>
   );

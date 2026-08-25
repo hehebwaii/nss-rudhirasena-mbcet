@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   Clock,
+  FolderSync,
   Hourglass,
   RefreshCw,
   RotateCcw,
@@ -16,8 +17,11 @@ import DonorCard from '../components/DonorCard';
 import DonorProfileModal from '../components/DonorProfileModal';
 import RegisterDonorModal from '../components/RegisterDonorModal';
 import EditDonorModal from '../components/EditDonorModal';
+import DigitalDonorCardModal from '../components/DigitalDonorCardModal';
+import SyncDriveCertificatesModal from '../components/SyncDriveCertificatesModal';
 import {
   getEligibility,
+  getEligibilityDetails,
   normalizeGroup,
   uniqueLocations,
 } from '../utils/donor';
@@ -67,8 +71,11 @@ export default function Dashboard({ onNavigateTab }) {
   const [selectedYear, setSelectedYear] = useState('all');
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [registerOpen, setRegisterOpen] = useState(false);
+  const [syncDriveOpen, setSyncDriveOpen] = useState(false);
   const [profileDonor, setProfileDonor] = useState(null);
   const [editingDonor, setEditingDonor] = useState(null);
+  const [idCardDonor, setIdCardDonor] = useState(null);
+  const [idCardFromProfile, setIdCardFromProfile] = useState(false);
 
   const locations = useMemo(() => uniqueLocations(donors), [donors]);
 
@@ -165,6 +172,15 @@ export default function Dashboard({ onNavigateTab }) {
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
+            onClick={() => setSyncDriveOpen(true)}
+            className="flex cursor-pointer items-center gap-2 rounded-xl border border-red-200 bg-red-50/70 px-4 py-2.5 text-sm font-bold text-red-700 transition-[color,background-color,border-color,transform] duration-150 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 active:scale-[0.98]"
+            title="Paste Google Drive folder link to automatically match and display certificates for donors"
+          >
+            <FolderSync className="h-4 w-4" />
+            <span className="hidden sm:inline">Link</span> Drive Folder
+          </button>
+          <button
+            type="button"
             onClick={() => loadDonors()}
             disabled={isLoading}
             className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-[color,background-color,border-color,transform] duration-150 hover:border-red-200 hover:bg-red-50 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100"
@@ -228,15 +244,15 @@ export default function Dashboard({ onNavigateTab }) {
             icon={<UserCheck className="h-4 w-4" />}
             label="Eligible Now"
             value={counts.eligible}
-            hint="Past their cooling period today."
+            hint="Past their 90-day cooling period today."
             tone="emerald"
             style={{ animationDelay: '60ms' }}
           />
           <StatCard
             icon={<Hourglass className="h-4 w-4" />}
-            label="In Cooling Period"
+            label="In 90-Day Cooldown"
             value={counts.cooling}
-            hint="Not yet eligible to donate again."
+            hint="Currently in 90-day rest period."
             tone="amber"
             style={{ animationDelay: '120ms' }}
           />
@@ -296,6 +312,7 @@ export default function Dashboard({ onNavigateTab }) {
                     donors={filtered}
                     onView={setProfileDonor}
                     onEdit={setEditingDonor}
+                    onViewIdCard={(d) => { setIdCardFromProfile(false); setIdCardDonor(d); }}
                   />
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:hidden">
                     {filtered.map((donor, index) => (
@@ -304,6 +321,7 @@ export default function Dashboard({ onNavigateTab }) {
                         donor={donor}
                         onView={setProfileDonor}
                         onEdit={setEditingDonor}
+                        onViewIdCard={(d) => { setIdCardFromProfile(false); setIdCardDonor(d); }}
                         style={{ animationDelay: `${Math.min(index, 14) * 25}ms` }}
                       />
                     ))}
@@ -344,13 +362,37 @@ export default function Dashboard({ onNavigateTab }) {
         open={Boolean(profileDonor)}
         donor={profileDonor}
         onClose={() => setProfileDonor(null)}
-        onEdit={setEditingDonor}
+        onEdit={(d) => {
+          setProfileDonor(null);
+          setEditingDonor(d);
+        }}
+        onViewIdCard={(d) => {
+          setProfileDonor(null);
+          setIdCardFromProfile(true);
+          setIdCardDonor(d);
+        }}
       />
       <EditDonorModal
         open={Boolean(editingDonor)}
         donor={editingDonor}
         onClose={() => setEditingDonor(null)}
         onUpdated={() => loadDonors({ silent: true })}
+      />
+      <DigitalDonorCardModal
+        open={Boolean(idCardDonor)}
+        donor={idCardDonor}
+        onClose={() => {
+          const d = idCardDonor;
+          setIdCardDonor(null);
+          if (idCardFromProfile && d) {
+            setIdCardFromProfile(false);
+            setProfileDonor(d);
+          }
+        }}
+      />
+      <SyncDriveCertificatesModal
+        open={syncDriveOpen}
+        onClose={() => setSyncDriveOpen(false)}
       />
     </div>
   );

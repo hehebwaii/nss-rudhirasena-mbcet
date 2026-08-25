@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import {
   CheckCircle2,
   ExternalLink,
@@ -23,18 +23,22 @@ export default function SmartDonorMatchModal({
   onClose,
   onAssign,
 }) {
+  const lastCaseRef = useRef(emergencyCase);
+  if (emergencyCase) lastCaseRef.current = emergencyCase;
+  const activeCase = emergencyCase || lastCaseRef.current;
+
   const { donors } = useDonors();
   const [search, setSearch] = useState('');
   const [assigningId, setAssigningId] = useState(null);
 
   const matchedDonors = useMemo(() => {
-    if (!emergencyCase) return [];
+    if (!activeCase) return [];
     return findMatchingDonors(
-      emergencyCase.bloodGroup,
-      emergencyCase.hospital,
+      activeCase.bloodGroup,
+      activeCase.hospital,
       donors
     );
-  }, [emergencyCase, donors]);
+  }, [activeCase, donors]);
 
   const filteredMatches = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -48,15 +52,15 @@ export default function SmartDonorMatchModal({
     });
   }, [matchedDonors, search]);
 
-  if (!open || !emergencyCase) return null;
+  if (!activeCase) return null;
 
-  const isAssigned = (donorId) => emergencyCase.assignedDonorId === donorId;
+  const isAssigned = (donorId) => activeCase.assignedDonorId === donorId;
 
   const handleAssign = async (donor) => {
     const donorId = donor.ID || donor.Donor_ID;
     setAssigningId(donorId);
     try {
-      await onAssign(emergencyCase.id, donor, 'In Progress');
+      await onAssign(activeCase.id, donor, 'In Progress');
       onClose();
     } finally {
       setAssigningId(null);
@@ -67,7 +71,7 @@ export default function SmartDonorMatchModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={`Smart Donor Match · ${emergencyCase.bloodGroup} Needed`}
+      title={`Smart Donor Match · ${activeCase.bloodGroup} Needed`}
       maxWidth="max-w-3xl"
     >
       {/* Case Overview Header */}

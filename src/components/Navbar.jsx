@@ -6,10 +6,12 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  Smartphone,
   Users,
   X,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { usePWA } from '../context/PWAContext';
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -20,6 +22,7 @@ const NAV_ITEMS = [
 
 export default function Navbar({ activeTab = 'dashboard', onTabChange }) {
   const { logout, user } = useAuth();
+  const { isInstallable, isInstalled, promptInstall } = usePWA();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const handleSelect = (tabId) => {
@@ -77,6 +80,17 @@ export default function Navbar({ activeTab = 'dashboard', onTabChange }) {
 
           <div className="mx-2 h-4 w-px bg-slate-200" />
 
+          {isInstallable && !isInstalled && (
+            <button
+              type="button"
+              onClick={promptInstall}
+              className="mr-1 flex cursor-pointer items-center gap-1.5 rounded-xl border border-red-200 bg-red-50/80 px-3 py-1.5 text-xs font-bold text-red-700 shadow-xs transition-[background-color,border-color,transform] hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-red-600 active:scale-95"
+            >
+              <Smartphone className="h-3.5 w-3.5" />
+              <span>Install App</span>
+            </button>
+          )}
+
           {user && (
             <div className="mr-1 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -131,6 +145,21 @@ export default function Navbar({ activeTab = 'dashboard', onTabChange }) {
                 </button>
               );
             })}
+
+            {isInstallable && !isInstalled && (
+              <button
+                type="button"
+                onClick={() => {
+                  promptInstall();
+                  setMenuOpen(false);
+                }}
+                className="my-1 flex w-full cursor-pointer items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-bold text-red-700 hover:bg-red-100 transition-colors"
+              >
+                <Smartphone className="h-4 w-4 text-red-700" />
+                <span>Install Rudhirasena App</span>
+              </button>
+            )}
+
             {user && (
               <div className="my-1 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
                 <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />

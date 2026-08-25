@@ -92,8 +92,13 @@ const HEADER_MAP = {
   'location': 'Location',
   'district': 'Location',
   'district / location': 'Location',
+  'district/location': 'Location',
   'district_location': 'Location',
+  'district location': 'Location',
   'city': 'Location',
+  'place': 'Location',
+  'native': 'Location',
+  'address': 'Location',
   'last donated date': 'Last Donated Date',
   'last_donated_date': 'Last Donated Date',
   'last donation date': 'Last Donated Date',
@@ -180,17 +185,30 @@ function doGet(e) {
         nextEligibleDate = getNextEligibleDate_(donationType, gender, lastDonatedDate);
       }
 
-      let combinedDeptYear = getVal('Department / Year');
-      let dept = getVal('Department', 4);
-      let year = getVal('Year', 5);
+      let combinedDeptYear = getVal('Department / Year') || getVal('Department_Year');
+      let dept = getVal('Department') || (columnMap['Department'] !== undefined ? row[columnMap['Department']] : '');
+      let rawYear = getVal('Year') || getVal('Year_of_Study') || (columnMap['Year'] !== undefined ? row[columnMap['Year']] : '');
 
-      if (!year && dept) {
+      if (!dept && combinedDeptYear) {
+        dept = combinedDeptYear;
+      }
+
+      if (!rawYear && combinedDeptYear) {
+        const yrMatch = /(1st|2nd|3rd|4th|\b[1-4](?:st|nd|rd|th)?\b)\s*(?:year|yr)?/i.exec(String(combinedDeptYear));
+        if (yrMatch) {
+          rawYear = yrMatch[0];
+        }
+      }
+
+      if (dept) {
         const yrMatch = /(1st|2nd|3rd|4th|\b[1-4](?:st|nd|rd|th)?\b)\s*(?:year|yr)?/i.exec(String(dept));
         if (yrMatch) {
-          year = normalizeYear_(yrMatch[0]);
+          if (!rawYear) rawYear = yrMatch[0];
           dept = String(dept).replace(yrMatch[0], '').replace(/[-–—/()]/g, '').trim();
         }
       }
+
+      const year = normalizeYear_(rawYear);
 
       result.push({
         'ID': String(getVal('ID', 0) || ('DON-' + r)).trim(),
@@ -199,12 +217,18 @@ function doGet(e) {
         'Blood Group': String(getVal('Blood Group', 2)).trim(),
         'Contact': String(getVal('Contact', 3)).trim(),
         'Department': String(dept || 'General').trim(),
-        'Year': String(year || '1st Year').trim(),
-        'Department_Year': combinedDeptYear || (year ? (dept ? dept + ' - ' + year : year) : dept),
-        'Age': getVal('Age', 6) !== '' ? Number(getVal('Age', 6)) : '',
-        'Weight': getVal('Weight', 7) !== '' ? Number(getVal('Weight', 7)) : '',
+        'Year': year,
+        'Department_Year': combinedDeptYear || (dept ? `${dept} - ${year}` : year),
+        'Age': getVal('Age') !== '' ? Number(getVal('Age')) : '',
+        'Weight': getVal('Weight') !== '' ? Number(getVal('Weight')) : '',
         'Gender': String(gender).trim(),
-        'Location': String(getVal('Location', 9)).trim(),
+        'Location': (function() {
+          const rawLoc = getVal('Location') || getVal('District_Location') || getVal('District / Location') || getVal('District') || getVal('City');
+          if (rawLoc instanceof Date) return '';
+          const strLoc = String(rawLoc || '').trim();
+          if (/GMT[+-]\d{4}/i.test(strLoc) || /India Standard Time/i.test(strLoc) || /^[A-Za-z]{3}\s+[A-Za-z]{3}\s+\d{1,2}\s+\d{4}/i.test(strLoc)) return '';
+          return strLoc;
+        })(),
         'Last Donated Date': lastDonatedDate instanceof Date ? formatDate_(lastDonatedDate) : String(lastDonatedDate).trim(),
         'Last Donation Type': String(donationType).trim(),
         'Last Donation Venue': String(getVal('Last Donation Venue', 12)).trim(),
@@ -437,6 +461,198 @@ function doPost(e) {
       return jsonResponse_({ status: 'success', message: 'Record removed.', id: targetId });
     }
 
+    // -------------------------------------------------------------
+    // Sync & Match Google Drive Certificates Folder
+    // -------------------------------------------------------------
+    if (action === 'sync_drive_certificates' || action === 'sync_drive_folder' || action === 'match_drive_certificates') {
+      const folderUrl = String(body.folderUrl || body.driveLink || body.url || '').trim();
+      if (!folderUrl) {
+        throw new ValidationError_('Please provide a valid Google Drive folder link or folder ID.');
+      }
+      if (!verifyAuth_(token)) {
+        throw new ValidationError_('Unauthorized: Valid coordinator authentication required to sync certificates.');
+      }
+
+      const folderId = extractDriveFolderId_(folderUrl);
+      if (!folderId) {
+        throw new ValidationError_('Could not extract a valid Google Drive Folder ID from the provided link. Ensure it is a Google Drive folder URL (e.g., https://drive.google.com/drive/folders/...).');
+      }
+
+      let folder;
+      try {
+        folder = DriveApp.getFolderById(folderId);
+      } catch (fErr) {
+        throw new ValidationError_('Unable to access Google Drive folder (' + fErr.message + '). Please verify the folder link and ensure the folder is shared with "Anyone with the link can view" or accessible to the coordinator account.');
+      }
+
+      const sheet = getSheet_();
+      const allValues = sheet.getDataRange().getValues();
+      if (allValues.length < 2) {
+        return jsonResponse_({
+          status: 'success',
+          success: true,
+          message: 'Google Sheet is empty. No donors found to match.',
+          matchedCount: 0,
+          totalFiles: 0,
+          matches: []
+        });
+      }
+
+      const headerRow = allValues[0];
+      const columnMap = {};
+      for (let c = 0; c < headerRow.length; c++) {
+        const originalHeader = String(headerRow[c]).trim();
+        const cleaned = originalHeader.toLowerCase().replace(/[\s_\-]+/g, ' ');
+        const canonical = HEADER_MAP[cleaned] || originalHeader;
+        columnMap[canonical] = c;
+      }
+
+      const certColIndex = columnMap['Certificate URL'] !== undefined ? columnMap['Certificate URL'] : -1;
+      if (certColIndex === -1) {
+        throw new ValidationError_('Could not locate the "Certificate URL" column in the Google Sheet.');
+      }
+
+      // Collect all files from Drive folder (including subfolders if any)
+      const filesList = [];
+      function collectFilesFromFolder_(f) {
+        const files = f.getFiles();
+        while (files.hasNext()) {
+          const file = files.next();
+          try {
+            file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+          } catch (shErr) {
+            // ignore permission errors on already shared files
+          }
+          filesList.push({
+            id: file.getId(),
+            name: file.getName(),
+            url: file.getUrl(),
+            downloadUrl: 'https://drive.google.com/uc?export=view&id=' + file.getId()
+          });
+        }
+        const subfolders = f.getFolders();
+        while (subfolders.hasNext()) {
+          collectFilesFromFolder_(subfolders.next());
+        }
+      }
+
+      collectFilesFromFolder_(folder);
+
+      if (filesList.length === 0) {
+        return jsonResponse_({
+          status: 'success',
+          success: true,
+          message: 'The specified Google Drive folder does not contain any files.',
+          totalFiles: 0,
+          matchedCount: 0,
+          matches: []
+        });
+      }
+
+      // Normalize string for fuzzy comparison
+      function normalizeForMatch_(str) {
+        return String(str || '')
+          .toLowerCase()
+          .replace(/[._\-–—/\\()[\],]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+
+      const lock = LockService.getScriptLock();
+      lock.waitLock(15000);
+
+      const matches = [];
+      const unmatchedFiles = [...filesList];
+      let updatedRowCount = 0;
+
+      try {
+        for (let r = 1; r < allValues.length; r++) {
+          const row = allValues[r];
+          const donorId = String(columnMap['ID'] !== undefined ? row[columnMap['ID']] : (row[0] || '')).trim();
+          const donorName = String(columnMap['Name'] !== undefined ? row[columnMap['Name']] : (row[1] || '')).trim();
+          const contact = String(columnMap['Contact'] !== undefined ? row[columnMap['Contact']] : (row[3] || '')).replace(/[\s-]/g, '').trim();
+
+          if (!donorId && !donorName) continue;
+
+          const normId = normalizeForMatch_(donorId);
+          const normName = normalizeForMatch_(donorName);
+          const nameTokens = normName.split(' ').filter(t => t.length > 2);
+
+          const existingCertsRaw = String(row[certColIndex] || '').trim();
+          const currentUrls = existingCertsRaw ? existingCertsRaw.split(/[\n,;]+/).map(u => u.trim()).filter(Boolean) : [];
+          const newUrls = [...currentUrls];
+          let donorMatched = false;
+
+          for (let fi = 0; fi < filesList.length; fi++) {
+            const file = filesList[fi];
+            const normFileName = normalizeForMatch_(file.name.replace(/\.[a-zA-Z0-9]+$/, '')); // remove extension
+
+            let isMatch = false;
+
+            // 1. Direct ID match (e.g. RUD-001, DON-01, etc.)
+            if (normId && normFileName.includes(normId)) {
+              isMatch = true;
+            } else if (normId && normId.replace(/\s+/g, '') === normFileName.replace(/\s+/g, '')) {
+              isMatch = true;
+            }
+            // 2. Exact or substring Donor ID match with standard prefixes
+            else if (donorId && new RegExp('\\b' + donorId.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + '\\b', 'i').test(file.name)) {
+              isMatch = true;
+            }
+            // 3. Contact number match (10 digits)
+            else if (contact && contact.length >= 10 && file.name.includes(contact)) {
+              isMatch = true;
+            }
+            // 4. Name match (full name in file name)
+            else if (normName && normName.length >= 3 && normFileName.includes(normName)) {
+              isMatch = true;
+            }
+            // 5. Significant name tokens match (if all >2 char words match)
+            else if (nameTokens.length >= 2 && nameTokens.every(token => normFileName.includes(token))) {
+              isMatch = true;
+            }
+
+            if (isMatch) {
+              donorMatched = true;
+              if (!newUrls.includes(file.url)) {
+                newUrls.push(file.url);
+              }
+              matches.push({
+                donorId: donorId,
+                donorName: donorName,
+                fileName: file.name,
+                fileUrl: file.url
+              });
+
+              // remove from unmatched
+              const unIndex = unmatchedFiles.findIndex(uf => uf.id === file.id);
+              if (unIndex !== -1) {
+                unmatchedFiles.splice(unIndex, 1);
+              }
+            }
+          }
+
+          if (donorMatched && newUrls.length > currentUrls.length) {
+            sheet.getRange(r + 1, certColIndex + 1).setValue(newUrls.join(', '));
+            updatedRowCount++;
+          }
+        }
+      } finally {
+        lock.releaseLock();
+      }
+
+      return jsonResponse_({
+        status: 'success',
+        success: true,
+        message: 'Successfully scanned ' + filesList.length + ' file(s). Linked ' + matches.length + ' certificate(s) across ' + updatedRowCount + ' donor(s).',
+        totalFiles: filesList.length,
+        matchedCount: matches.length,
+        updatedDonorsCount: updatedRowCount,
+        matches: matches,
+        unmatchedFiles: unmatchedFiles.map(f => f.name)
+      });
+    }
+
     // Check auth for any mutations
     const isUpdate = action === 'update' || action === 'edit' || action.startsWith('update_');
     if (!verifyAuth_(token)) {
@@ -451,9 +667,9 @@ function doPost(e) {
     const department = reqStr_(body.Department || body.Department_Year, 'Department', 100);
     const year = optStr_(body.Year || body.Year_of_Study || body.year || body.batch, 30);
     const age = reqNumber_(body.Age, 'Age', 16, 100);
-    const weight = reqNumber_(body.Weight || body.Weight_kg, 'Weight', 25, 250);
+    const weight = optNumber_(body.Weight || body.Weight_kg, 25, 250);
     const gender = reqEnum_(body.Gender, GENDERS, 'Gender');
-    const location = reqStr_(body.Location || body.District_Location, 'Location', 150);
+    const location = optStr_(body.Location || body.District_Location || body['District / Location'] || body.district_location || body.District || body.City || body.city, 150);
     const lastDonated = reqDate_(body['Last Donated Date'] || body.Last_Donated_Date, 'Last Donated Date');
     const donationType = reqEnum_(body['Last Donation Type'] || body.Last_Donation_Type, DONATION_TYPES, 'Last Donation Type');
     const venue = optStr_(body['Last Donation Venue'] || body.Last_Donation_Venue, 150);
@@ -858,6 +1074,15 @@ function reqNumber_(value, field, min, max) {
   return n;
 }
 
+function optNumber_(value, min, max) {
+  if (value == null || value === '' || isNaN(Number(value))) return '';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '';
+  if (min !== undefined && n < min) return '';
+  if (max !== undefined && n > max) return '';
+  return n;
+}
+
 function reqContact_(value) {
   const cleaned = String(value == null ? '' : value).replace(/[\s-]/g, '').slice(0, 20);
   if (!/^\+?[0-9]{7,15}$/.test(cleaned)) {
@@ -965,6 +1190,32 @@ function formatDonorName_(name) {
     .join(' ');
 }
 
+function normalizeYear_(value) {
+  if (!value) return '1st Year';
+  const str = String(value).trim();
+  const lower = str.toLowerCase();
+
+  if (lower === '3rd year' || lower === '3rd' || lower === 'third' || lower === '3' || lower === 'year 3' || lower === '3rd yr' || lower === 's5' || lower === 's6') {
+    return '3rd Year';
+  }
+  if (lower === '4th year' || lower === '4th' || lower === 'fourth' || lower === '4' || lower === 'year 4' || lower === '4th yr' || lower === 'final' || lower === 'final year' || lower === 's7' || lower === 's8') {
+    return '4th Year';
+  }
+  if (lower === '2nd year' || lower === '2nd' || lower === 'second' || lower === '2' || lower === 'year 2' || lower === '2nd yr' || lower === 's3' || lower === 's4') {
+    return '2nd Year';
+  }
+  if (lower === '1st year' || lower === '1st' || lower === 'first' || lower === '1' || lower === 'year 1' || lower === '1st yr' || lower === 's1' || lower === 's2') {
+    return '1st Year';
+  }
+
+  if (/\b(?:4th|fourth|final)\b/i.test(str) || /\b4\b/.test(str)) return '4th Year';
+  if (/\b(?:3rd|third)\b/i.test(str) || /\b3\b/.test(str)) return '3rd Year';
+  if (/\b(?:2nd|second)\b/i.test(str) || /\b2\b/.test(str)) return '2nd Year';
+  if (/\b(?:1st|first)\b/i.test(str) || /\b1\b/.test(str)) return '1st Year';
+
+  return '1st Year';
+}
+
 function generateId_() {
   return 'DON-' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyMMddHHmmssSSS');
 }
@@ -1015,5 +1266,15 @@ function testSendOtp() {
   });
   Logger.log('Test email successfully dispatched to ' + testEmail);
   return 'Test email successfully sent to ' + testEmail;
+}
+
+function extractDriveFolderId_(urlOrId) {
+  if (!urlOrId) return '';
+  const str = String(urlOrId).trim();
+  if (/^[a-zA-Z0-9_-]{20,}$/.test(str)) {
+    return str;
+  }
+  const match = str.match(/folders\/([a-zA-Z0-9_-]+)/i) || str.match(/[?&]id=([a-zA-Z0-9_-]+)/i);
+  return match ? match[1] : '';
 }
 

@@ -4,7 +4,7 @@ import { BLOOD_GROUPS, YEARS } from '../utils/donor';
 const ELIGIBILITY_OPTIONS = [
   { value: 'all', label: 'All' },
   { value: 'eligible', label: 'Eligible Now' },
-  { value: 'cooling', label: 'Cooling' },
+  { value: 'cooling', label: 'In Cooldown' },
 ];
 
 const legendClass =

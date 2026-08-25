@@ -1,6 +1,10 @@
 export const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 export const YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
 
+export const COOLDOWN_DAYS_WHOLE_BLOOD = 90;
+export const COOLDOWN_DAYS_PLATELETS = 14;
+export const NEWLY_ELIGIBLE_WINDOW_DAYS = 30;
+
 const MS_PER_DAY = 86400000;
 
 export function startOfDay(date) {
@@ -28,37 +32,94 @@ export function parseDateOnly(value) {
   return isNaN(fallback.getTime()) ? null : startOfDay(fallback);
 }
 
-export function getEligibility(donor) {
-  if (!donor) return 'unknown';
-  const nextVal = donor['Next Eligible Date'] || donor.Next_Eligible_Date || donor.nextEligibleDate;
-  if (
-    typeof nextVal === 'string' &&
-    (nextVal.toLowerCase().trim() === 'eligible' || nextVal.toLowerCase().trim() === 'now')
-  ) {
-    return 'eligible';
+/**
+ * Full 90-day cooldown details calculator
+ */
+export function getEligibilityDetails(donor) {
+  if (!donor) {
+    return {
+      status: 'unknown',
+      daysLeft: null,
+      daysElapsed: null,
+      totalCooldown: COOLDOWN_DAYS_WHOLE_BLOOD,
+      progressPercent: 100,
+      isNewlyEligible: false,
+      lastDonatedDate: null,
+      nextEligibleDate: null,
+    };
   }
-  const next = parseDateOnly(nextVal);
-  if (!next) {
-    return 'eligible';
-  }
+
   const today = startOfDay(new Date());
-  return today.getTime() >= next.getTime() ? 'eligible' : 'cooling';
+  const rawLast = donor['Last Donated Date'] || donor.Last_Donated_Date || donor.lastDonatedDate;
+  const rawNext = donor['Next Eligible Date'] || donor.Next_Eligible_Date || donor.nextEligibleDate;
+  const donationType = donor['Last Donation Type'] || donor.Last_Donation_Type || 'Whole Blood';
+
+  const totalCooldown =
+    donationType === 'Platelets' || donationType === 'Plasma'
+      ? COOLDOWN_DAYS_PLATELETS
+      : COOLDOWN_DAYS_WHOLE_BLOOD;
+
+  const parsedLast = parseDateOnly(rawLast);
+  let parsedNext = parseDateOnly(rawNext);
+
+  // If next eligible date is missing but last donated date exists, calculate Last + 90d
+  if (!parsedNext && parsedLast) {
+    parsedNext = new Date(parsedLast.getTime() + totalCooldown * MS_PER_DAY);
+  }
+
+  // If both missing, donor has no recorded donation and is ready
+  if (!parsedNext && !parsedLast) {
+    return {
+      status: 'eligible',
+      daysLeft: 0,
+      daysElapsed: totalCooldown,
+      totalCooldown,
+      progressPercent: 100,
+      lastDonatedDate: null,
+      nextEligibleDate: null,
+    };
+  }
+
+  const nextTime = (parsedNext || today).getTime();
+  const todayTime = today.getTime();
+
+  if (todayTime < nextTime) {
+    // Currently cooling down
+    const daysLeft = Math.max(1, Math.ceil((nextTime - todayTime) / MS_PER_DAY));
+    const daysElapsed = Math.max(0, totalCooldown - daysLeft);
+    const progressPercent = Math.min(99, Math.max(1, Math.round((daysElapsed / totalCooldown) * 100)));
+
+    return {
+      status: 'cooling',
+      daysLeft,
+      daysElapsed,
+      totalCooldown,
+      progressPercent,
+      lastDonatedDate: parsedLast,
+      nextEligibleDate: parsedNext,
+    };
+  }
+
+  // Cooldown complete (eligible)
+  return {
+    status: 'eligible',
+    daysLeft: 0,
+    daysElapsed: totalCooldown,
+    totalCooldown,
+    progressPercent: 100,
+    lastDonatedDate: parsedLast,
+    nextEligibleDate: parsedNext,
+  };
+}
+
+export function getEligibility(donor) {
+  const details = getEligibilityDetails(donor);
+  return details.status;
 }
 
 export function daysRemaining(donor) {
-  const nextVal =
-    donor &&
-    (donor['Next Eligible Date'] || donor.Next_Eligible_Date || donor.nextEligibleDate);
-  if (
-    typeof nextVal === 'string' &&
-    (nextVal.toLowerCase().trim() === 'eligible' || nextVal.toLowerCase().trim() === 'now')
-  ) {
-    return 0;
-  }
-  const next = parseDateOnly(nextVal);
-  if (!next) return null;
-  const today = startOfDay(new Date());
-  return Math.max(0, Math.round((next.getTime() - today.getTime()) / MS_PER_DAY));
+  const details = getEligibilityDetails(donor);
+  return details.daysLeft;
 }
 
 export function formatShortDate(value) {
@@ -88,27 +149,65 @@ export function normalizeGroup(value) {
 }
 
 export function normalizeYear(value) {
-  if (!value) return '';
+  if (!value) return '1st Year';
   const str = String(value).trim();
   const lower = str.toLowerCase();
-  if (lower.includes('1') || lower.includes('first')) return '1st Year';
-  if (lower.includes('2') || lower.includes('second')) return '2nd Year';
-  if (lower.includes('3') || lower.includes('third')) return '3rd Year';
-  if (lower.includes('4') || lower.includes('fourth') || lower.includes('final')) return '4th Year';
+
+  // Direct canonical matches
+  if (lower === '3rd year' || lower === '3rd' || lower === 'third' || lower === '3' || lower === 'year 3' || lower === '3rd yr' || lower === 's5' || lower === 's6') {
+    return '3rd Year';
+  }
+  if (lower === '4th year' || lower === '4th' || lower === 'fourth' || lower === '4' || lower === 'year 4' || lower === '4th yr' || lower === 'final' || lower === 'final year' || lower === 's7' || lower === 's8') {
+    return '4th Year';
+  }
+  if (lower === '2nd year' || lower === '2nd' || lower === 'second' || lower === '2' || lower === 'year 2' || lower === '2nd yr' || lower === 's3' || lower === 's4') {
+    return '2nd Year';
+  }
+  if (lower === '1st year' || lower === '1st' || lower === 'first' || lower === '1' || lower === 'year 1' || lower === '1st yr' || lower === 's1' || lower === 's2') {
+    return '1st Year';
+  }
+
+  // Word boundary regex check
+  if (/\b(?:4th|fourth|final)\b/i.test(str) || /\b4\b/.test(str)) return '4th Year';
+  if (/\b(?:3rd|third)\b/i.test(str) || /\b3\b/.test(str)) return '3rd Year';
+  if (/\b(?:2nd|second)\b/i.test(str) || /\b2\b/.test(str)) return '2nd Year';
+  if (/\b(?:1st|first)\b/i.test(str) || /\b1\b/.test(str)) return '1st Year';
+
+  return '1st Year';
+}
+
+export function cleanLocation(val) {
+  if (val == null) return '';
+  if (val instanceof Date) return '';
+  const str = String(val).trim();
+  if (!str) return '';
+  if (
+    /GMT[+-]\d{4}/i.test(str) ||
+    /India Standard Time/i.test(str) ||
+    /^[A-Za-z]{3}\s+[A-Za-z]{3}\s+\d{1,2}\s+\d{4}/i.test(str) ||
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/i.test(str)
+  ) {
+    return '';
+  }
   return str;
 }
 
 export function uniqueLocations(donors) {
   const seen = new Map();
   (donors || []).forEach((donor) => {
-    const raw =
+    const raw = cleanLocation(
       donor.Location ||
       donor.District_Location ||
       donor.district_location ||
+      donor['District / Location'] ||
       donor.District ||
       donor.district ||
-      donor.city;
-    if (raw == null) return;
+      donor.city ||
+      donor.City ||
+      donor.Place ||
+      donor.place
+    );
+    if (!raw) return;
     const value = String(raw).trim();
     if (!value) return;
     const key = value.toLowerCase();
@@ -217,9 +316,27 @@ export function normalizeDonor(raw, index = 0) {
   const year = normalizeYear(rawYear);
   const department = rawDept || 'General';
   const age = raw.Age ?? raw.age ?? '';
-  const weight = raw.Weight ?? raw.Weight_kg ?? raw.weight_kg ?? raw.weight ?? raw['Weight (kg)'] ?? '';
+  const rawWeight = raw.Weight ?? raw.Weight_kg ?? raw.weight_kg ?? raw.weight ?? raw['Weight (kg)'] ?? '';
+  const weight = rawWeight !== '' && rawWeight != null && !isNaN(Number(rawWeight)) ? Number(rawWeight) : '';
   const gender = pick('Gender', 'gender', 'Sex', 'sex');
-  const location = pick('Location', 'District_Location', 'district_location', 'District', 'district', 'City', 'city', 'location', 'District / Location');
+  const location = cleanLocation(
+    pick(
+      'Location',
+      'District_Location',
+      'district_location',
+      'District / Location',
+      'District/Location',
+      'District',
+      'district',
+      'City',
+      'city',
+      'location',
+      'Place',
+      'place',
+      'Address',
+      'address'
+    )
+  );
   const lastDonatedDate = pick('Last Donated Date', 'Last_Donated_Date', 'last_donated_date', 'LastDonatedDate', 'lastDonatedDate');
   const lastDonationType = pick('Last Donation Type', 'Last_Donation_Type', 'last_donation_type', 'LastDonationType', 'lastDonationType');
   const lastDonationVenue = pick('Last Donation Venue', 'Last_Donation_Venue', 'last_donation_venue', 'LastDonationVenue', 'Venue', 'venue', 'Last Donation Venue');
