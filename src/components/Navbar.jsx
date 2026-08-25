@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Activity,
   BarChart3,
   Droplet,
   LayoutDashboard,
@@ -13,6 +14,7 @@ import { useAuth } from '../context/AuthContext';
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'donors', label: 'Donors', icon: Users },
+  { id: 'operations', label: 'Operations', icon: Activity },
   { id: 'reports', label: 'Reports', icon: BarChart3 },
 ];
 

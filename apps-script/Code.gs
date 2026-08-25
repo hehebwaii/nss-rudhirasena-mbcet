@@ -20,6 +20,7 @@ const MAX_PAYLOAD_BYTES = 10485760; // 10 MB payload for certificate file upload
 
 const CANONICAL_HEADERS = [
   'ID',
+  'Record_Type',
   'Name',
   'Blood Group',
   'Contact',
@@ -33,7 +34,16 @@ const CANONICAL_HEADERS = [
   'Last Donation Type',
   'Last Donation Venue',
   'Certificate URL',
-  'Next Eligible Date'
+  'Next Eligible Date',
+  'Status',
+  'Urgency',
+  'Hospital_Venue',
+  'Units_Needed',
+  'Units_Collected',
+  'Assigned_Donor_ID',
+  'Assigned_Donor_Name',
+  'Camp_ID',
+  'Notes'
 ];
 
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
@@ -235,17 +245,58 @@ function doPost(e) {
     }
 
     const action = String(body.action || '').toLowerCase().trim();
-    const isUpdate = action === 'update' || action === 'edit';
+    const isUpdate = action === 'update' || action === 'edit' || action.startsWith('update_');
 
     // 2. Authentication Check for Updates & Mutations
     const token = body.auth_token || body.key || body.apiKey || (e.parameter && (e.parameter.key || e.parameter.auth)) || '';
+
+    // Handle record deletion
+    if (action === 'delete' || action === 'delete_record') {
+      const targetId = String(body.id || body.ID || body.Donor_ID || '').trim().toLowerCase();
+      if (!targetId) {
+        throw new ValidationError_('Record ID is required for deletion.');
+      }
+      if (!verifyAuth_(token)) {
+        throw new ValidationError_('Unauthorized: Admin authorization required to delete records.');
+      }
+
+      const sheet = getSheet_();
+      const allValues = sheet.getDataRange().getValues();
+      if (allValues.length > 1) {
+        const headerRow = allValues[0];
+        let idColIndex = -1;
+        for (let c = 0; c < headerRow.length; c++) {
+          const h = String(headerRow[c]).trim().toLowerCase().replace(/[\s_\-]+/g, ' ');
+          if (h === 'id' || h === 'donor id' || h === 'donor_id' || h === 'donorid') {
+            idColIndex = c;
+            break;
+          }
+        }
+        if (idColIndex !== -1) {
+          const lock = LockService.getScriptLock();
+          lock.waitLock(10000);
+          try {
+            for (let r = 1; r < allValues.length; r++) {
+              if (String(allValues[r][idColIndex]).trim().toLowerCase() === targetId) {
+                sheet.deleteRow(r + 1);
+                return jsonResponse_({ status: 'success', message: 'Record deleted successfully.', id: targetId });
+              }
+            }
+          } finally {
+            lock.releaseLock();
+          }
+        }
+      }
+      return jsonResponse_({ status: 'success', message: 'Record removed.', id: targetId });
+    }
+
     if (isUpdate && !verifyAuth_(token)) {
       throw new ValidationError_('Unauthorized: Admin authorization required to edit member details.');
     }
 
     // 3. Strict Input Sanitization & Validation (OWASP Injection Protection)
     const id = optStr_(body.ID || body.Donor_ID, 50) || generateId_();
-    const name = reqStr_(body.Name || body.Full_Name, 'Name', 100);
+    const name = formatDonorName_(reqStr_(body.Name || body.Full_Name, 'Name', 100));
     const bloodGroup = reqEnum_(body['Blood Group'] || body.Blood_Group, BLOOD_GROUPS, 'Blood Group');
     const contact = reqContact_(body.Contact || body.Contact_Number || body.Phone);
     const department = reqStr_(body.Department || body.Department_Year, 'Department', 100);
@@ -376,7 +427,17 @@ function doPost(e) {
       'Certificate Link': sanitizeFormula_(certUrl),
       'Cert URL': sanitizeFormula_(certUrl),
       'Next Eligible Date': nextEligibleDate,
-      'Next_Eligible_Date': nextEligibleDate
+      'Next_Eligible_Date': nextEligibleDate,
+      'Record_Type': sanitizeFormula_(body.recordType || body.Record_Type || (action.includes('case') ? 'Emergency_Case' : action.includes('camp') ? 'Camp' : action.includes('donation') ? 'Voluntary_Donation' : 'Donor')),
+      'Status': sanitizeFormula_(body.status || body.Status || ''),
+      'Urgency': sanitizeFormula_(body.urgency || body.Urgency || ''),
+      'Hospital_Venue': sanitizeFormula_(body.hospital || body.venue || body.Hospital_Venue || venue),
+      'Units_Needed': body.unitsNeeded || body.Units_Needed || '',
+      'Units_Collected': body.units || body.collectedUnits || body.Units_Collected || '',
+      'Assigned_Donor_ID': sanitizeFormula_(body.assignedDonorId || body.Assigned_Donor_ID || ''),
+      'Assigned_Donor_Name': sanitizeFormula_(body.assignedDonorName || body.Assigned_Donor_Name || ''),
+      'Camp_ID': sanitizeFormula_(body.campId || body.Camp_ID || ''),
+      'Notes': sanitizeFormula_(body.notes || body.Notes || '')
     };
 
     let formattedRow = [];
@@ -638,6 +699,39 @@ function cellValue_(cell) {
 
 function formatDate_(date) {
   return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+/**
+ * Format donor name: Remove dots, Title Case words, keep initials capitalized and spaced
+ * Examples:
+ *   "rahul v.s" -> "Rahul V S"
+ *   "s.s. niranjan" -> "S S Niranjan"
+ *   "anandu krishnan p.k." -> "Anandu Krishnan P K"
+ */
+function formatDonorName_(name) {
+  if (!name) return '';
+  const clean = String(name).replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!clean) return '';
+
+  return clean
+    .split(' ')
+    .map(function (word) {
+      if (!word) return '';
+
+      // Single character initial
+      if (word.length === 1) {
+        return word.toUpperCase();
+      }
+
+      // 2 or 3 letter initial sequence without vowels (e.g. "ss", "pk")
+      if (word.length <= 3 && !/[aeiouy]/i.test(word)) {
+        return word.toUpperCase().split('').join(' ');
+      }
+
+      // Standard word
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(' ');
 }
 
 function generateId_() {

@@ -137,6 +137,45 @@ export function getCertificateUrls(donor) {
 }
 
 /**
+ * Formats donor name such that:
+ * 1. Dots/periods are removed, and initials are separated by spaces.
+ * 2. Each word has first letter capital, rest lowercase (Title Case).
+ * 3. Initials (e.g. "S S", "P K", "V S") are ALWAYS capitalized and spaced,
+ *    regardless of whether they appear at the beginning, middle, or end.
+ * Examples:
+ *   "rahul v.s" -> "Rahul V S"
+ *   "s.s. niranjan" -> "S S Niranjan"
+ *   "anandu krishnan p.k." -> "Anandu Krishnan P K"
+ */
+export function formatDonorName(name) {
+  if (!name || typeof name !== 'string') return '';
+  // Remove dots and commas, replace with spaces, and collapse multiple spaces
+  const clean = name.replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!clean) return '';
+
+  return clean
+    .split(' ')
+    .map((word) => {
+      if (!word) return '';
+
+      // Single character initial (e.g. "s", "k", "p", "v") -> "S", "K", "P", "V"
+      if (word.length === 1) {
+        return word.toUpperCase();
+      }
+
+      // 2 or 3 letter initial sequence without vowels (e.g. "ss", "pk", "kp", "sk", "ms", "ck")
+      // e.g. "ss" -> "S S", "pk" -> "P K"
+      if (word.length <= 3 && !/[aeiouy]/i.test(word)) {
+        return word.toUpperCase().split('').join(' ');
+      }
+
+      // Standard word (e.g. "rahul" -> "Rahul", "NIRANJAN" -> "Niranjan")
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(' ');
+}
+
+/**
  * Normalizes donor records from any Google Sheet / Apps Script header format
  * to canonical properties expected by UI components.
  */
@@ -153,7 +192,8 @@ export function normalizeDonor(raw, index = 0) {
   };
 
   const id = pick('ID', 'Donor_ID', 'donor_id', 'DonorID', 'id') || `RUD-${String(index + 1).padStart(3, '0')}`;
-  const name = pick('Name', 'Full_Name', 'full_name', 'FullName', 'Donor_Name', 'name', 'Full Name');
+  const rawName = pick('Name', 'Full_Name', 'full_name', 'FullName', 'Donor_Name', 'name', 'Full Name');
+  const name = formatDonorName(rawName);
   const bloodGroup = pick('Blood Group', 'Blood_Group', 'blood_group', 'BloodGroup', 'bloodGroup', 'Group');
   const contact = pick('Contact', 'Contact_Number', 'contact_number', 'ContactNumber', 'Phone', 'phone', 'Mobile', 'mobile', 'Contact Number');
   

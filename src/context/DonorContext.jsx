@@ -140,6 +140,36 @@ export function DonorProvider({ children }) {
     return data;
   }, [authToken]);
 
+  const batchAddOrUpdateDonors = useCallback(async (donorList) => {
+    setDonors((prev) => {
+      const updated = [...prev];
+      donorList.forEach((incoming) => {
+        const id = incoming.ID || incoming.Donor_ID;
+        const norm = normalizeDonor(incoming);
+        const idx = updated.findIndex(
+          (d) =>
+            (id && (d.ID === id || d.Donor_ID === id)) ||
+            (d.Contact && incoming.Contact && d.Contact === incoming.Contact)
+        );
+        if (idx !== -1) {
+          updated[idx] = { ...updated[idx], ...norm };
+        } else {
+          updated.unshift(norm);
+        }
+      });
+      return updated;
+    });
+
+    // Sync to backend
+    for (const d of donorList) {
+      try {
+        await addDonor(d);
+      } catch (err) {
+        console.warn('Batch donor import sync note:', err.message);
+      }
+    }
+  }, [addDonor]);
+
   useEffect(() => {
     if (isAuthenticated) {
       loadDonors();
@@ -147,8 +177,17 @@ export function DonorProvider({ children }) {
   }, [isAuthenticated, loadDonors]);
 
   const value = useMemo(
-    () => ({ donors, status, error, lastUpdated, loadDonors, addDonor, updateDonor }),
-    [donors, status, error, lastUpdated, loadDonors, addDonor, updateDonor]
+    () => ({
+      donors,
+      status,
+      error,
+      lastUpdated,
+      loadDonors,
+      addDonor,
+      updateDonor,
+      batchAddOrUpdateDonors,
+    }),
+    [donors, status, error, lastUpdated, loadDonors, addDonor, updateDonor, batchAddOrUpdateDonors]
   );
 
   return <DonorContext.Provider value={value}>{children}</DonorContext.Provider>;
