@@ -144,15 +144,19 @@ export function DonorProvider({ children }) {
   }, [authToken]);
 
   const batchAddOrUpdateDonors = useCallback(async (donorList) => {
+    if (!Array.isArray(donorList) || donorList.length === 0) return;
+
+    // Optimistically update local donor state
     setDonors((prev) => {
       const updated = [...prev];
       donorList.forEach((incoming) => {
         const id = incoming.ID || incoming.Donor_ID;
         const norm = normalizeDonor(incoming);
+        const incomingContact = String(incoming.Contact || '').replace(/\D/g, '').slice(-10);
         const idx = updated.findIndex(
           (d) =>
             (id && (d.ID === id || d.Donor_ID === id)) ||
-            (d.Contact && incoming.Contact && d.Contact === incoming.Contact)
+            (incomingContact && incomingContact.length === 10 && String(d.Contact || '').replace(/\D/g, '').slice(-10) === incomingContact)
         );
         if (idx !== -1) {
           updated[idx] = { ...updated[idx], ...norm };
@@ -163,33 +167,39 @@ export function DonorProvider({ children }) {
       return updated;
     });
 
-    // Sync to backend
-    for (const d of donorList) {
-      try {
-        await addDonor(d);
-      } catch (err) {
-        console.warn('Batch donor import sync note:', err.message);
-      }
+    // Single fast atomic batch sync to backend
+    try {
+      await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'batch_upsert_donors',
+          sessionToken: authToken,
+          auth_token: authToken,
+          donors: donorList,
+        }),
+      });
+    } catch (err) {
+      console.warn('Batch donor import sync note:', err.message);
     }
-  }, [addDonor]);
+  }, [authToken]);
 
-  const syncDriveCertificates = useCallback(async (folderUrl) => {
-    const fullPayload = {
-      action: 'sync_drive_certificates',
-      sessionToken: authToken,
-      auth_token: authToken,
-      folderUrl: folderUrl,
-    };
+  const deleteDonor = useCallback(async (donorId) => {
+    if (!donorId) return;
+
+    // Optimistically remove from local state
+    setDonors((prev) => prev.filter((d) => (d.ID || d.Donor_ID) !== donorId));
 
     const response = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(fullPayload),
+      body: JSON.stringify({
+        action: 'delete_donor',
+        sessionToken: authToken,
+        auth_token: authToken,
+        donorId,
+      }),
     });
-
-    if (response.status === 429) {
-      throw new Error('Rate limit reached: Please wait a minute before syncing again.');
-    }
 
     if (!response.ok) {
       throw new Error(`Server returned error status ${response.status}`);
@@ -197,13 +207,39 @@ export function DonorProvider({ children }) {
 
     const data = await response.json();
     if (data && (data.status === 'error' || data.success === false)) {
-      throw new Error(data.error || 'Failed to sync Drive certificates.');
+      throw new Error(data.error || 'Failed to delete donor.');
+    }
+    return data;
+  }, [authToken]);
+
+  const bulkDeleteDonors = useCallback(async (donorIds) => {
+    if (!Array.isArray(donorIds) || donorIds.length === 0) return;
+
+    const idSet = new Set(donorIds);
+    // Optimistically remove all from local state
+    setDonors((prev) => prev.filter((d) => !idSet.has(d.ID || d.Donor_ID)));
+
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'bulk_delete_donors',
+        sessionToken: authToken,
+        auth_token: authToken,
+        donorIds,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server returned error status ${response.status}`);
     }
 
-    // Reload donors to reflect matched certificate URLs
-    await loadDonors({ silent: true });
+    const data = await response.json();
+    if (data && (data.status === 'error' || data.success === false)) {
+      throw new Error(data.error || 'Failed to bulk delete donors.');
+    }
     return data;
-  }, [authToken, loadDonors]);
+  }, [authToken]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -220,10 +256,11 @@ export function DonorProvider({ children }) {
       loadDonors,
       addDonor,
       updateDonor,
+      deleteDonor,
+      bulkDeleteDonors,
       batchAddOrUpdateDonors,
-      syncDriveCertificates,
     }),
-    [donors, status, error, lastUpdated, loadDonors, addDonor, updateDonor, batchAddOrUpdateDonors, syncDriveCertificates]
+    [donors, status, error, lastUpdated, loadDonors, addDonor, updateDonor, deleteDonor, bulkDeleteDonors, batchAddOrUpdateDonors]
   );
 
   return <DonorContext.Provider value={value}>{children}</DonorContext.Provider>;

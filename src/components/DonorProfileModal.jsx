@@ -11,6 +11,7 @@ import {
   ExternalLink,
   MessageCircle,
   QrCode,
+  Trash2,
 } from 'lucide-react';
 import Modal from './Modal';
 import StatusBadge from './StatusBadge';
@@ -23,7 +24,7 @@ const dateClass = {
   unknown: 'text-slate-500',
 };
 
-export default function DonorProfileModal({ open, donor, onClose, onEdit, onViewIdCard }) {
+export default function DonorProfileModal({ open, donor, onClose, onEdit, onViewIdCard, onDelete }) {
   const lastDonorRef = useRef(donor);
   if (donor) lastDonorRef.current = donor;
   const activeDonor = donor || lastDonorRef.current;
@@ -237,23 +238,38 @@ export default function DonorProfileModal({ open, donor, onClose, onEdit, onView
       )}
 
       <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4">
-        {onEdit ? (
-          <button
-            type="button"
-            onClick={() => {
-              onClose();
-              onEdit(activeDonor);
-            }}
-            className="flex cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-bold text-white transition-[background-color,transform] duration-150 hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-slate-900 active:scale-[0.98]"
-          >
-            <Edit3 className="h-4 w-4 text-slate-300" />
-            Edit Details
-          </button>
-        ) : <div />}
+        <div className="flex items-center gap-2">
+          {onEdit && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onEdit(activeDonor);
+              }}
+              className="flex cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white transition-[background-color,transform] duration-150 hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-slate-900 active:scale-[0.98]"
+            >
+              <Edit3 className="h-4 w-4 text-slate-300" />
+              Edit
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onDelete(activeDonor);
+              }}
+              className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2 text-sm font-bold text-red-700 transition-[background-color,transform] duration-150 hover:bg-red-100 hover:border-red-300 focus-visible:outline-2 focus-visible:outline-red-600 active:scale-[0.98]"
+            >
+              <Trash2 className="h-4 w-4 text-red-600" />
+              Delete
+            </button>
+          )}
+        </div>
         <button
           type="button"
           onClick={onClose}
-          className="cursor-pointer rounded-xl border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-600 transition-[color,background-color,transform] duration-150 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 active:scale-[0.98]"
+          className="cursor-pointer rounded-xl border border-slate-300 px-5 py-2 text-sm font-semibold text-slate-600 transition-[color,background-color,transform] duration-150 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400 active:scale-[0.98]"
         >
           Close
         </button>

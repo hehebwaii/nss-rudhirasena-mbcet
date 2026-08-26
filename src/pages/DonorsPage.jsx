@@ -1,19 +1,21 @@
 import { useMemo, useState } from 'react';
 import {
+  Check,
+  CheckSquare,
   Download,
-  Filter,
-  FolderSync,
   Grid,
   List,
+  Loader2,
   Plus,
   RefreshCw,
   RotateCcw,
   Search,
-  SlidersHorizontal,
+  Trash2,
   TriangleAlert,
   UserCheck,
   UserPlus,
   Users,
+  X,
 } from 'lucide-react';
 import { useDonors } from '../context/DonorContext';
 import DonorTable from '../components/DonorTable';
@@ -22,7 +24,7 @@ import DonorProfileModal from '../components/DonorProfileModal';
 import RegisterDonorModal from '../components/RegisterDonorModal';
 import EditDonorModal from '../components/EditDonorModal';
 import DigitalDonorCardModal from '../components/DigitalDonorCardModal';
-import SyncDriveCertificatesModal from '../components/SyncDriveCertificatesModal';
+import Modal from '../components/Modal';
 import {
   BLOOD_GROUPS,
   YEARS,
@@ -33,7 +35,7 @@ import {
 } from '../utils/donor';
 
 export default function DonorsPage() {
-  const { donors, status, error, loadDonors } = useDonors();
+  const { donors, status, error, loadDonors, deleteDonor, bulkDeleteDonors } = useDonors();
   const isLoading = status === 'loading';
 
   const [search, setSearch] = useState('');
@@ -44,8 +46,16 @@ export default function DonorsPage() {
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [selectedDept, setSelectedDept] = useState('all');
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'grid'
+
+  // Selection & Bulk Actions State
+  const [selectedDonorIds, setSelectedDonorIds] = useState([]);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [donorsToDelete, setDonorsToDelete] = useState([]);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
+  // Modals
   const [registerOpen, setRegisterOpen] = useState(false);
-  const [syncDriveOpen, setSyncDriveOpen] = useState(false);
   const [profileDonor, setProfileDonor] = useState(null);
   const [editingDonor, setEditingDonor] = useState(null);
   const [idCardDonor, setIdCardDonor] = useState(null);
@@ -154,8 +164,80 @@ export default function DonorsPage() {
         : [...previous, group]
     );
 
-  const exportCSV = () => {
-    if (filtered.length === 0) return;
+  // Selection Handlers
+  const handleToggleSelect = (id) => {
+    setSelectedDonorIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = (checked) => {
+    if (checked) {
+      const allFilteredIds = filtered
+        .map((d) => d.ID || d.Donor_ID)
+        .filter(Boolean);
+      setSelectedDonorIds(allFilteredIds);
+    } else {
+      setSelectedDonorIds([]);
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedDonorIds([]);
+  };
+
+  // Trigger Bulk Deletion Modal
+  const handleTriggerBulkDelete = () => {
+    if (selectedDonorIds.length === 0) return;
+    const selectedDonorsList = donors.filter((d) =>
+      selectedDonorIds.includes(d.ID || d.Donor_ID)
+    );
+    setDonorsToDelete(selectedDonorsList);
+    setDeleteError('');
+    setDeleteModalOpen(true);
+  };
+
+  // Trigger Single Deletion Modal
+  const handleTriggerSingleDelete = (donor) => {
+    setDonorsToDelete([donor]);
+    setDeleteError('');
+    setDeleteModalOpen(true);
+  };
+
+  // Execute Deletion
+  const handleConfirmDelete = async () => {
+    if (donorsToDelete.length === 0) return;
+    setIsDeleting(true);
+    setDeleteError('');
+
+    try {
+      const idsToDelete = donorsToDelete.map((d) => d.ID || d.Donor_ID).filter(Boolean);
+      if (idsToDelete.length === 1) {
+        await deleteDonor(idsToDelete[0]);
+      } else {
+        await bulkDeleteDonors(idsToDelete);
+      }
+
+      // Remove deleted IDs from current selection
+      const deletedSet = new Set(idsToDelete);
+      setSelectedDonorIds((prev) => prev.filter((id) => !deletedSet.has(id)));
+      setDeleteModalOpen(false);
+      setDonorsToDelete([]);
+
+      // Close profile modal if viewing deleted donor
+      if (profileDonor && deletedSet.has(profileDonor.ID || profileDonor.Donor_ID)) {
+        setProfileDonor(null);
+      }
+    } catch (err) {
+      setDeleteError(err.message || 'Failed to delete donors. Please check connection and try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Export CSV Helper
+  const exportCSVData = (records, filename) => {
+    if (records.length === 0) return;
     const headers = [
       'ID',
       'Name',
@@ -173,7 +255,7 @@ export default function DonorsPage() {
       'Status',
     ];
 
-    const rows = filtered.map((d) => [
+    const rows = records.map((d) => [
       `"${d.ID || ''}"`,
       `"${d.Name || ''}"`,
       `"${d['Blood Group'] || ''}"`,
@@ -197,14 +279,28 @@ export default function DonorsPage() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `NSS_Rudhirasena_Donors_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', filename);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
+  const exportFilteredCSV = () => {
+    exportCSVData(filtered, `NSS_Rudhirasena_Donors_${new Date().toISOString().slice(0, 10)}.csv`);
+  };
+
+  const exportSelectedCSV = () => {
+    const selectedRecords = donors.filter((d) =>
+      selectedDonorIds.includes(d.ID || d.Donor_ID)
+    );
+    exportCSVData(
+      selectedRecords,
+      `NSS_Rudhirasena_Selected_Donors_${new Date().toISOString().slice(0, 10)}.csv`
+    );
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20">
       {/* Header Section */}
       <div className="flex animate-rise flex-wrap items-end justify-between gap-4">
         <div>
@@ -212,22 +308,13 @@ export default function DonorsPage() {
             Donor Registry
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Search, filter, and manage all registered volunteer blood donors.
+            Search, filter, manage, and organize registered volunteer blood donors.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
-            onClick={() => setSyncDriveOpen(true)}
-            className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-red-200 bg-red-50/70 px-3.5 py-2.5 text-sm font-bold text-red-700 transition-[color,background-color,border-color,transform] duration-150 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 active:scale-[0.98]"
-            title="Paste Google Drive folder link to automatically match and display certificates for donors"
-          >
-            <FolderSync className="h-4 w-4" />
-            <span className="hidden sm:inline">Link</span> Drive Folder
-          </button>
-          <button
-            type="button"
-            onClick={exportCSV}
+            onClick={exportFilteredCSV}
             disabled={filtered.length === 0}
             className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 transition-[color,background-color,border-color,transform] duration-150 hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
             title="Download current filtered list as CSV"
@@ -465,6 +552,18 @@ export default function DonorsPage() {
             <span className="font-semibold text-slate-900">{donors.length}</span> donor
             {donors.length === 1 ? '' : 's'}
           </p>
+
+          {/* Quick select all toggle on mobile or top view */}
+          {filtered.length > 0 && (
+            <button
+              type="button"
+              onClick={() => handleSelectAll(selectedDonorIds.length !== filtered.length)}
+              className="cursor-pointer text-xs font-semibold text-slate-600 hover:text-red-700 transition-colors inline-flex items-center gap-1"
+            >
+              <CheckSquare className="h-3.5 w-3.5" />
+              {selectedDonorIds.length === filtered.length ? 'Deselect All' : `Select All (${filtered.length})`}
+            </button>
+          )}
         </div>
 
         {isLoading ? (
@@ -481,35 +580,51 @@ export default function DonorsPage() {
             <>
               <DonorTable
                 donors={filtered}
+                selectedDonorIds={selectedDonorIds}
+                onToggleSelect={handleToggleSelect}
+                onSelectAll={handleSelectAll}
                 onView={setProfileDonor}
                 onEdit={setEditingDonor}
                 onViewIdCard={(d) => { setIdCardFromProfile(false); setIdCardDonor(d); }}
+                onDeleteDonor={handleTriggerSingleDelete}
               />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:hidden">
-                {filtered.map((donor, index) => (
-                  <DonorCard
-                    key={String(donor.ID || donor.Donor_ID || index)}
-                    donor={donor}
-                    onView={setProfileDonor}
-                    onEdit={setEditingDonor}
-                    onViewIdCard={(d) => { setIdCardFromProfile(false); setIdCardDonor(d); }}
-                    style={{ animationDelay: `${Math.min(index, 14) * 25}ms` }}
-                  />
-                ))}
+                {filtered.map((donor, index) => {
+                  const donorId = donor.ID || donor.Donor_ID;
+                  return (
+                    <DonorCard
+                      key={String(donorId || index)}
+                      donor={donor}
+                      isSelected={selectedDonorIds.includes(donorId)}
+                      onToggleSelect={handleToggleSelect}
+                      onView={setProfileDonor}
+                      onEdit={setEditingDonor}
+                      onViewIdCard={(d) => { setIdCardFromProfile(false); setIdCardDonor(d); }}
+                      onDeleteDonor={handleTriggerSingleDelete}
+                      style={{ animationDelay: `${Math.min(index, 14) * 25}ms` }}
+                    />
+                  );
+                })}
               </div>
             </>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {filtered.map((donor, index) => (
-                <DonorCard
-                  key={String(donor.ID || donor.Donor_ID || index)}
-                  donor={donor}
-                  onView={setProfileDonor}
-                  onEdit={setEditingDonor}
-                  onViewIdCard={(d) => { setIdCardFromProfile(false); setIdCardDonor(d); }}
-                  style={{ animationDelay: `${Math.min(index, 14) * 25}ms` }}
-                />
-              ))}
+              {filtered.map((donor, index) => {
+                const donorId = donor.ID || donor.Donor_ID;
+                return (
+                  <DonorCard
+                    key={String(donorId || index)}
+                    donor={donor}
+                    isSelected={selectedDonorIds.includes(donorId)}
+                    onToggleSelect={handleToggleSelect}
+                    onView={setProfileDonor}
+                    onEdit={setEditingDonor}
+                    onViewIdCard={(d) => { setIdCardFromProfile(false); setIdCardDonor(d); }}
+                    onDeleteDonor={handleTriggerSingleDelete}
+                    style={{ animationDelay: `${Math.min(index, 14) * 25}ms` }}
+                  />
+                );
+              })}
             </div>
           )
         ) : (
@@ -535,6 +650,122 @@ export default function DonorsPage() {
         )}
       </div>
 
+      {/* Floating Bulk Action Bar */}
+      {selectedDonorIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 animate-rise">
+          <div className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/95 px-4 py-3 text-white shadow-2xl backdrop-blur-md">
+            <div className="flex items-center gap-2 pr-2 border-r border-slate-700 text-sm font-bold">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-xs text-white">
+                {selectedDonorIds.length}
+              </span>
+              <span className="hidden sm:inline">Selected</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={exportSelectedCSV}
+              className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700 hover:text-white transition-colors"
+              title="Export selected donors to CSV"
+            >
+              <Download className="h-3.5 w-3.5 text-slate-300" />
+              <span className="hidden sm:inline">Export</span> CSV
+            </button>
+
+            <button
+              type="button"
+              onClick={handleTriggerBulkDelete}
+              className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-red-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-red-700 active:scale-95 transition-all"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete {selectedDonorIds.length} Donor{selectedDonorIds.length === 1 ? '' : 's'}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleClearSelection}
+              className="cursor-pointer p-1 text-slate-400 hover:text-white transition-colors"
+              title="Clear selection"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for Single/Bulk Deletion */}
+      <Modal
+        open={deleteModalOpen}
+        onClose={() => !isDeleting && setDeleteModalOpen(false)}
+        title={`Delete ${donorsToDelete.length} Donor${donorsToDelete.length === 1 ? '' : 's'}`}
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50/80 p-3.5 text-xs text-red-900">
+            <TriangleAlert className="h-5 w-5 shrink-0 text-red-600 mt-0.5" />
+            <div>
+              <p className="font-bold text-sm text-red-800">
+                Are you sure you want to permanently delete {donorsToDelete.length} donor record{donorsToDelete.length === 1 ? '' : 's'}?
+              </p>
+              <p className="mt-1 text-red-700 leading-relaxed">
+                This action will remove their entries from Google Sheets and the live directory. This cannot be undone.
+              </p>
+            </div>
+          </div>
+
+          {/* Donors Preview List */}
+          <div className="max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-2 space-y-1.5">
+            {donorsToDelete.map((d, idx) => (
+              <div
+                key={idx}
+                className="flex items-center justify-between rounded-lg bg-white px-3 py-1.5 text-xs border border-slate-100"
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <span className="font-bold text-slate-800 truncate">{d.Name || d.Full_Name}</span>
+                  <span className="text-[10px] font-mono text-slate-400">({d.ID || d.Donor_ID})</span>
+                </div>
+                <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-700 border border-red-100 shrink-0">
+                  {d['Blood Group'] || d.Blood_Group}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {deleteError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+              {deleteError}
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              disabled={isDeleting}
+              onClick={() => setDeleteModalOpen(false)}
+              className="cursor-pointer rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={isDeleting}
+              onClick={handleConfirmDelete}
+              className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-red-700 active:scale-95 disabled:opacity-50"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Deleting from Sheets...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Confirm Delete ({donorsToDelete.length})
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       <RegisterDonorModal
         open={registerOpen}
         onClose={() => setRegisterOpen(false)}
@@ -552,6 +783,9 @@ export default function DonorsPage() {
           setProfileDonor(null);
           setIdCardFromProfile(true);
           setIdCardDonor(d);
+        }}
+        onDelete={(d) => {
+          handleTriggerSingleDelete(d);
         }}
       />
       <EditDonorModal
@@ -571,10 +805,6 @@ export default function DonorsPage() {
             setProfileDonor(d);
           }
         }}
-      />
-      <SyncDriveCertificatesModal
-        open={syncDriveOpen}
-        onClose={() => setSyncDriveOpen(false)}
       />
     </div>
   );

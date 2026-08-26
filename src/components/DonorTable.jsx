@@ -1,4 +1,4 @@
-import { Edit3, ExternalLink, Eye, MapPin, Phone, QrCode } from 'lucide-react';
+import { Edit3, ExternalLink, Eye, MapPin, Phone, QrCode, Trash2 } from 'lucide-react';
 import StatusBadge from './StatusBadge';
 import CooldownProgress from './CooldownProgress';
 import {
@@ -10,6 +10,7 @@ import {
 } from '../utils/donor';
 
 const COLUMNS = [
+  { key: 'select', label: '', align: 'text-center', width: 'w-10' },
   { key: 'donor', label: 'Donor', align: 'text-left', width: 'min-w-[14rem]' },
   { key: 'bloodGroup', label: 'Blood Group', align: 'text-center', width: 'w-[7rem]' },
   { key: 'deptYear', label: 'Dept · Year', align: 'text-left', width: 'min-w-[12rem]' },
@@ -17,7 +18,7 @@ const COLUMNS = [
   { key: 'location', label: 'Location', align: 'text-left', width: 'min-w-[10rem]' },
   { key: 'venue', label: 'Last Donation Venue', align: 'text-left', width: 'min-w-[12rem]' },
   { key: 'eligibility', label: 'Next Eligible Date', align: 'text-left', width: 'min-w-[12.5rem]' },
-  { key: 'actions', label: 'Actions', align: 'text-right', width: 'w-[9.5rem]' },
+  { key: 'actions', label: 'Actions', align: 'text-right', width: 'w-[10.5rem]' },
 ];
 
 const dateClass = {
@@ -29,13 +30,37 @@ const dateClass = {
 const linkFocus =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600';
 
-export default function DonorTable({ donors, onView, onEdit, onViewIdCard }) {
+export default function DonorTable({
+  donors = [],
+  selectedDonorIds = [],
+  onToggleSelect,
+  onSelectAll,
+  onView,
+  onEdit,
+  onViewIdCard,
+  onDeleteDonor,
+}) {
+  const allSelected = donors.length > 0 && selectedDonorIds.length === donors.length;
+  const isIndeterminate = selectedDonorIds.length > 0 && selectedDonorIds.length < donors.length;
+
   return (
     <div className="hidden overflow-x-auto rounded-2xl border border-slate-200/80 bg-white shadow-card md:block">
-      <table className="w-full min-w-[58rem] divide-y divide-slate-200 text-left text-sm">
+      <table className="w-full min-w-[60rem] divide-y divide-slate-200 text-left text-sm">
         <thead className="bg-slate-50/80">
           <tr>
-            {COLUMNS.map(({ key, label, align, width }) => (
+            <th scope="col" className="px-3.5 py-3.5 text-center w-10">
+              <input
+                type="checkbox"
+                aria-label="Select all donors"
+                className="h-4 w-4 cursor-pointer rounded border-slate-300 text-red-600 focus:ring-red-500"
+                checked={allSelected}
+                ref={(el) => {
+                  if (el) el.indeterminate = isIndeterminate;
+                }}
+                onChange={(e) => onSelectAll && onSelectAll(e.target.checked)}
+              />
+            </th>
+            {COLUMNS.filter((c) => c.key !== 'select').map(({ key, label, align, width }) => (
               <th
                 key={key}
                 scope="col"
@@ -48,6 +73,8 @@ export default function DonorTable({ donors, onView, onEdit, onViewIdCard }) {
         </thead>
         <tbody className="divide-y divide-slate-100">
           {donors.map((donor, index) => {
+            const donorId = donor.ID || donor.Donor_ID || `temp-${index}`;
+            const isSelected = selectedDonorIds.includes(donorId);
             const eligibility = getEligibility(donor);
             const daysLeft = daysRemaining(donor);
             const certificateUrls = getCertificateUrls(donor);
@@ -67,11 +94,27 @@ export default function DonorTable({ donors, onView, onEdit, onViewIdCard }) {
 
             return (
               <tr
-                key={String(donor.ID || donor.Donor_ID || index)}
+                key={String(donorId)}
                 onClick={() => onView(donor)}
                 style={{ animationDelay: `${Math.min(index, 14) * 25}ms` }}
-                className="animate-rise cursor-pointer transition-colors duration-150 hover:bg-red-50/30"
+                className={`animate-rise cursor-pointer transition-colors duration-150 ${
+                  isSelected ? 'bg-red-50/70 hover:bg-red-50/90' : 'hover:bg-red-50/30'
+                }`}
               >
+                {/* Checkbox Column */}
+                <td
+                  className="px-3.5 py-3.5 text-center w-10"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${name}`}
+                    className="h-4 w-4 cursor-pointer rounded border-slate-300 text-red-600 focus:ring-red-500"
+                    checked={isSelected}
+                    onChange={() => onToggleSelect && onToggleSelect(donorId)}
+                  />
+                </td>
+
                 {/* 1. Donor Name, ID & Contact */}
                 <td className="px-4 py-3.5">
                   <div className="min-w-0">
@@ -210,6 +253,17 @@ export default function DonorTable({ donors, onView, onEdit, onViewIdCard }) {
                     >
                       <Eye className="h-3.5 w-3.5" />
                     </button>
+                    {onDeleteDonor && (
+                      <button
+                        type="button"
+                        onClick={() => onDeleteDonor(donor)}
+                        aria-label={`Delete ${name}`}
+                        title="Delete Donor"
+                        className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-slate-400 transition-colors duration-150 hover:bg-red-50 hover:text-red-600 focus-visible:outline-2 focus-visible:outline-red-600 active:scale-95"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>

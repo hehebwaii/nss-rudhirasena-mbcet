@@ -11,12 +11,14 @@ import {
   Search,
   Tent,
   Users,
+  Wand2,
 } from 'lucide-react';
 import { useOperations } from '../../context/OperationsContext';
 import NewCampModal from './NewCampModal';
 import EditCampModal from './EditCampModal';
 import CampDetailsModal from './CampDetailsModal';
 import ImportCampRosterModal from './ImportCampRosterModal';
+import AutoCampOrganizerModal from './AutoCampOrganizerModal';
 import CampQRScannerModal from '../CampQRScannerModal';
 import { formatShortDate } from '../../utils/donor';
 import { CAMP_STATUS } from '../../utils/operations';
@@ -31,6 +33,7 @@ export default function CampsTab({ onRegisterNewDonor }) {
   const [selectedCampId, setSelectedCampId] = useState(null);
   const [selectedCampForEditId, setSelectedCampForEditId] = useState(null);
   const [selectedCampForImportId, setSelectedCampForImportId] = useState(null);
+  const [isAutoOrganizerOpen, setIsAutoOrganizerOpen] = useState(false);
 
   const filteredCamps = useMemo(() => {
     return camps.filter((c) => {
@@ -123,6 +126,16 @@ export default function CampsTab({ onRegisterNewDonor }) {
           >
             <QrCode className="h-4 w-4 text-red-700" />
             <span>Scan Donor QR</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsAutoOrganizerOpen(true)}
+            className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-purple-300 bg-purple-50 px-3.5 py-2 text-xs font-bold text-purple-900 shadow-xs transition-all hover:bg-purple-100 active:scale-95"
+            title="Auto-create camps & sort combined Excel donors using Drive folder subfolders"
+          >
+            <Wand2 className="h-4 w-4 text-purple-700" />
+            <span>Auto-Organize Camps</span>
           </button>
 
           <button
@@ -310,6 +323,12 @@ export default function CampsTab({ onRegisterNewDonor }) {
         open={isScannerOpen}
         defaultCampId={scannerCampId}
         onClose={() => setIsScannerOpen(false)}
+      />
+
+      {/* Auto-Organize Camps Modal */}
+      <AutoCampOrganizerModal
+        open={isAutoOrganizerOpen}
+        onClose={() => setIsAutoOrganizerOpen(false)}
       />
     </div>
   );

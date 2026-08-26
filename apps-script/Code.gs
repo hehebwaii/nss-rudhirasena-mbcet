@@ -461,41 +461,179 @@ function doPost(e) {
       return jsonResponse_({ status: 'success', message: 'Record removed.', id: targetId });
     }
 
-    // -------------------------------------------------------------
-    // Sync & Match Google Drive Certificates Folder
-    // -------------------------------------------------------------
-    if (action === 'sync_drive_certificates' || action === 'sync_drive_folder' || action === 'match_drive_certificates') {
-      const folderUrl = String(body.folderUrl || body.driveLink || body.url || '').trim();
-      if (!folderUrl) {
-        throw new ValidationError_('Please provide a valid Google Drive folder link or folder ID.');
-      }
-      if (!verifyAuth_(token)) {
-        throw new ValidationError_('Unauthorized: Valid coordinator authentication required to sync certificates.');
-      }
+    // Check auth for any mutations
+    const isUpdate = action === 'update' || action === 'edit' || action.startsWith('update_');
+    if (!verifyAuth_(token)) {
+      throw new ValidationError_('Unauthorized: Valid coordinator authentication required.');
+    }
 
-      const folderId = extractDriveFolderId_(folderUrl);
-      if (!folderId) {
-        throw new ValidationError_('Could not extract a valid Google Drive Folder ID from the provided link. Ensure it is a Google Drive folder URL (e.g., https://drive.google.com/drive/folders/...).');
+    // -------------------------------------------------------------
+    // Scan Google Drive Folders & Camp Subfolders
+    // -------------------------------------------------------------
+    if (action === 'scan_drive_folder' || action === 'scan_drive_camps') {
+      const folderInput = String(body.folderUrl || body.folderId || body.url || '').trim();
+      if (!folderInput) {
+        throw new ValidationError_('Google Drive Folder URL or ID is required.');
       }
+      const scanResult = scanDriveFolder_(folderInput);
+      return jsonResponse_({
+        status: 'success',
+        success: true,
+        data: scanResult
+      });
+    }
 
-      let folder;
-      try {
-        folder = DriveApp.getFolderById(folderId);
-      } catch (fErr) {
-        throw new ValidationError_('Unable to access Google Drive folder (' + fErr.message + '). Please verify the folder link and ensure the folder is shared with "Anyone with the link can view" or accessible to the coordinator account.');
+    // -------------------------------------------------------------
+    // Batch Upsert / Sync Donors (Fast Bulk Insert)
+    // -------------------------------------------------------------
+    if (action === 'batch_upsert_donors' || action === 'batch_register_donors' || action === 'batch_add_donors') {
+      const donorList = Array.isArray(body.donors) ? body.donors : [];
+      if (donorList.length === 0) {
+        return jsonResponse_({ status: 'success', success: true, count: 0, message: 'No donors to sync.' });
       }
 
       const sheet = getSheet_();
       const allValues = sheet.getDataRange().getValues();
-      if (allValues.length < 2) {
-        return jsonResponse_({
-          status: 'success',
-          success: true,
-          message: 'Google Sheet is empty. No donors found to match.',
-          matchedCount: 0,
-          totalFiles: 0,
-          matches: []
+      const headerRow = allValues.length > 0 ? allValues[0] : CANONICAL_HEADERS;
+
+      const columnMap = {};
+      for (let c = 0; c < headerRow.length; c++) {
+        const originalHeader = String(headerRow[c]).trim();
+        const cleaned = originalHeader.toLowerCase().replace(/[\s_\-]+/g, ' ');
+        const canonical = HEADER_MAP[cleaned] || originalHeader;
+        columnMap[canonical] = c;
+      }
+
+      const idToRow = {};
+      const contactToRow = {};
+      const idCol = columnMap['ID'] !== undefined ? columnMap['ID'] : 0;
+      const contactCol = columnMap['Contact'] !== undefined ? columnMap['Contact'] : 4;
+
+      for (let r = 1; r < allValues.length; r++) {
+        const rowId = String(allValues[r][idCol] || '').trim().toLowerCase();
+        if (rowId) idToRow[rowId] = r + 1;
+        const rowContact = String(allValues[r][contactCol] || '').replace(/\D/g, '').slice(-10);
+        if (rowContact && rowContact.length === 10) contactToRow[rowContact] = r + 1;
+      }
+
+      const rowsToAppend = [];
+      const rowsToUpdate = [];
+
+      donorList.forEach((donor, idx) => {
+        const id = optStr_(donor.ID || donor.Donor_ID, 50) || ('DON-' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyMMddHHmmss') + '-' + (idx + 1));
+        const name = formatDonorName_(reqStr_(donor.Name || donor.Full_Name || 'Donor', 'Name', 100));
+        const bloodGroup = donor['Blood Group'] || donor.Blood_Group || 'O+';
+        const contact = reqContact_(donor.Contact || donor.Contact_Number || donor.Phone);
+        const department = String(donor.Department || donor.Department_Year || 'General').trim();
+        const year = optStr_(donor.Year || donor.Year_of_Study || donor.year, 30);
+        const age = donor.Age ? Number(donor.Age) : 20;
+        const weight = donor.Weight ? Number(donor.Weight) : '';
+        const gender = donor.Gender || 'Male';
+        const location = String(donor.Location || donor.District_Location || 'Trivandrum').trim();
+        const lastDonated = (donor['Last Donated Date'] || donor.Last_Donated_Date) ? reqDate_(donor['Last Donated Date'] || donor.Last_Donated_Date, 'Last Donated Date') : new Date();
+        const donationType = donor['Last Donation Type'] || donor.Last_Donation_Type || 'Whole Blood';
+        const venue = String(donor['Last Donation Venue'] || donor.Last_Donation_Venue || '').trim();
+        const certUrl = String(donor['Certificate URL'] || donor.Certificate_URL || donor.certUrl || '').trim();
+        const nextEligibleDate = getNextEligibleDate_(donationType, gender, lastDonated);
+        const combinedDeptYear = year ? (department ? department + ' - ' + year : year) : department;
+
+        const rowDataMap = {
+          'ID': sanitizeFormula_(id),
+          'Donor_ID': sanitizeFormula_(id),
+          'Name': sanitizeFormula_(name),
+          'Full_Name': sanitizeFormula_(name),
+          'Blood Group': sanitizeFormula_(bloodGroup),
+          'Blood_Group': sanitizeFormula_(bloodGroup),
+          'Contact': sanitizeFormula_(contact),
+          'Contact_Number': sanitizeFormula_(contact),
+          'Department': sanitizeFormula_(department),
+          'Department_Year': sanitizeFormula_(combinedDeptYear),
+          'Department / Year': sanitizeFormula_(combinedDeptYear),
+          'Year': sanitizeFormula_(year),
+          'Year_of_Study': sanitizeFormula_(year),
+          'Age': age,
+          'Weight': weight,
+          'Weight_kg': weight,
+          'Gender': sanitizeFormula_(gender),
+          'Location': sanitizeFormula_(location),
+          'District_Location': sanitizeFormula_(location),
+          'Last Donated Date': formatDate_(lastDonated),
+          'Last_Donated_Date': formatDate_(lastDonated),
+          'Last Donation Type': sanitizeFormula_(donationType),
+          'Last_Donation_Type': sanitizeFormula_(donationType),
+          'Last Donation Venue': sanitizeFormula_(venue),
+          'Last_Donation_Venue': sanitizeFormula_(venue),
+          'Certificate URL': sanitizeFormula_(certUrl),
+          'Certificate_URL': sanitizeFormula_(certUrl),
+          'Next Eligible Date': nextEligibleDate,
+          'Next_Eligible_Date': nextEligibleDate,
+          'Record_Type': sanitizeFormula_(donor.Record_Type || donor.recordType || 'Donor'),
+          'Status': sanitizeFormula_(donor.Status || donor.status || 'Active'),
+          'Camp_ID': sanitizeFormula_(donor.Camp_ID || donor.campId || ''),
+          'Notes': sanitizeFormula_(donor.Notes || donor.notes || '')
+        };
+
+        const formattedRow = headerRow.map(h => {
+          const cleaned = String(h).trim().toLowerCase().replace(/[\s_\-]+/g, ' ');
+          const canonicalKey = HEADER_MAP[cleaned] || String(h).trim();
+          return rowDataMap[canonicalKey] !== undefined ? rowDataMap[canonicalKey] : (rowDataMap[String(h).trim()] !== undefined ? rowDataMap[String(h).trim()] : '');
         });
+
+        const cleanId = String(id).trim().toLowerCase();
+        const cleanContact = String(contact).replace(/\D/g, '').slice(-10);
+        const existingRowIndex = idToRow[cleanId] || (cleanContact ? contactToRow[cleanContact] : null);
+
+        if (existingRowIndex) {
+          rowsToUpdate.push({ rowIndex: existingRowIndex, formattedRow });
+        } else {
+          rowsToAppend.push(formattedRow);
+        }
+      });
+
+      const lock = LockService.getScriptLock();
+      lock.waitLock(15000);
+      try {
+        rowsToUpdate.forEach(u => {
+          sheet.getRange(u.rowIndex, 1, 1, u.formattedRow.length).setValues([u.formattedRow]);
+        });
+        if (rowsToAppend.length > 0) {
+          sheet.getRange(sheet.getLastRow() + 1, 1, rowsToAppend.length, rowsToAppend[0].length).setValues(rowsToAppend);
+        }
+      } finally {
+        lock.releaseLock();
+      }
+
+      return jsonResponse_({
+        status: 'success',
+        success: true,
+        message: 'Batch synced ' + donorList.length + ' donors (' + rowsToUpdate.length + ' updated, ' + rowsToAppend.length + ' inserted).',
+        updatedCount: rowsToUpdate.length,
+        insertedCount: rowsToAppend.length,
+        count: donorList.length
+      });
+    }
+
+    // -------------------------------------------------------------
+    // Delete Single or Bulk Donors from Google Sheets
+    // -------------------------------------------------------------
+    if (action === 'delete_donor' || action === 'bulk_delete_donors' || action === 'delete_donors') {
+      const idsToDelete = [];
+      if (Array.isArray(body.donorIds)) {
+        body.donorIds.forEach(id => { if (id) idsToDelete.push(String(id).trim().toLowerCase()); });
+      } else if (Array.isArray(body.ids)) {
+        body.ids.forEach(id => { if (id) idsToDelete.push(String(id).trim().toLowerCase()); });
+      } else if (body.ID || body.Donor_ID || body.donorId || body.id) {
+        idsToDelete.push(String(body.ID || body.Donor_ID || body.donorId || body.id).trim().toLowerCase());
+      }
+
+      if (idsToDelete.length === 0) {
+        return jsonResponse_({ status: 'success', success: true, count: 0, message: 'No donor IDs provided for deletion.' });
+      }
+
+      const sheet = getSheet_();
+      const allValues = sheet.getDataRange().getValues();
+      if (allValues.length <= 1) {
+        return jsonResponse_({ status: 'success', success: true, count: 0, message: 'Sheet is already empty.' });
       }
 
       const headerRow = allValues[0];
@@ -506,157 +644,42 @@ function doPost(e) {
         const canonical = HEADER_MAP[cleaned] || originalHeader;
         columnMap[canonical] = c;
       }
+      const idCol = columnMap['ID'] !== undefined ? columnMap['ID'] : 0;
+      const contactCol = columnMap['Contact'] !== undefined ? columnMap['Contact'] : 4;
 
-      const certColIndex = columnMap['Certificate URL'] !== undefined ? columnMap['Certificate URL'] : -1;
-      if (certColIndex === -1) {
-        throw new ValidationError_('Could not locate the "Certificate URL" column in the Google Sheet.');
+      // Find all matching row indices (1-based for sheet.deleteRow)
+      const rowIndicesToDelete = [];
+      for (let r = 1; r < allValues.length; r++) {
+        const rowId = String(allValues[r][idCol] || '').trim().toLowerCase();
+        const rowContact = String(allValues[r][contactCol] || '').replace(/\D/g, '').slice(-10);
+
+        if (rowId && idsToDelete.includes(rowId)) {
+          rowIndicesToDelete.push(r + 1);
+        } else if (rowContact && idsToDelete.includes(rowContact)) {
+          rowIndicesToDelete.push(r + 1);
+        }
       }
 
-      // Collect all files from Drive folder (including subfolders if any)
-      const filesList = [];
-      function collectFilesFromFolder_(f) {
-        const files = f.getFiles();
-        while (files.hasNext()) {
-          const file = files.next();
-          try {
-            file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-          } catch (shErr) {
-            // ignore permission errors on already shared files
-          }
-          filesList.push({
-            id: file.getId(),
-            name: file.getName(),
-            url: file.getUrl(),
-            downloadUrl: 'https://drive.google.com/uc?export=view&id=' + file.getId()
+      if (rowIndicesToDelete.length > 0) {
+        const lock = LockService.getScriptLock();
+        lock.waitLock(15000);
+        try {
+          // Sort descending so deleting rows from bottom does not shift earlier row indexes
+          rowIndicesToDelete.sort(function(a, b) { return b - a; });
+          rowIndicesToDelete.forEach(function(rowIdx) {
+            sheet.deleteRow(rowIdx);
           });
+        } finally {
+          lock.releaseLock();
         }
-        const subfolders = f.getFolders();
-        while (subfolders.hasNext()) {
-          collectFilesFromFolder_(subfolders.next());
-        }
-      }
-
-      collectFilesFromFolder_(folder);
-
-      if (filesList.length === 0) {
-        return jsonResponse_({
-          status: 'success',
-          success: true,
-          message: 'The specified Google Drive folder does not contain any files.',
-          totalFiles: 0,
-          matchedCount: 0,
-          matches: []
-        });
-      }
-
-      // Normalize string for fuzzy comparison
-      function normalizeForMatch_(str) {
-        return String(str || '')
-          .toLowerCase()
-          .replace(/[._\-–—/\\()[\],]/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-      }
-
-      const lock = LockService.getScriptLock();
-      lock.waitLock(15000);
-
-      const matches = [];
-      const unmatchedFiles = [...filesList];
-      let updatedRowCount = 0;
-
-      try {
-        for (let r = 1; r < allValues.length; r++) {
-          const row = allValues[r];
-          const donorId = String(columnMap['ID'] !== undefined ? row[columnMap['ID']] : (row[0] || '')).trim();
-          const donorName = String(columnMap['Name'] !== undefined ? row[columnMap['Name']] : (row[1] || '')).trim();
-          const contact = String(columnMap['Contact'] !== undefined ? row[columnMap['Contact']] : (row[3] || '')).replace(/[\s-]/g, '').trim();
-
-          if (!donorId && !donorName) continue;
-
-          const normId = normalizeForMatch_(donorId);
-          const normName = normalizeForMatch_(donorName);
-          const nameTokens = normName.split(' ').filter(t => t.length > 2);
-
-          const existingCertsRaw = String(row[certColIndex] || '').trim();
-          const currentUrls = existingCertsRaw ? existingCertsRaw.split(/[\n,;]+/).map(u => u.trim()).filter(Boolean) : [];
-          const newUrls = [...currentUrls];
-          let donorMatched = false;
-
-          for (let fi = 0; fi < filesList.length; fi++) {
-            const file = filesList[fi];
-            const normFileName = normalizeForMatch_(file.name.replace(/\.[a-zA-Z0-9]+$/, '')); // remove extension
-
-            let isMatch = false;
-
-            // 1. Direct ID match (e.g. RUD-001, DON-01, etc.)
-            if (normId && normFileName.includes(normId)) {
-              isMatch = true;
-            } else if (normId && normId.replace(/\s+/g, '') === normFileName.replace(/\s+/g, '')) {
-              isMatch = true;
-            }
-            // 2. Exact or substring Donor ID match with standard prefixes
-            else if (donorId && new RegExp('\\b' + donorId.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + '\\b', 'i').test(file.name)) {
-              isMatch = true;
-            }
-            // 3. Contact number match (10 digits)
-            else if (contact && contact.length >= 10 && file.name.includes(contact)) {
-              isMatch = true;
-            }
-            // 4. Name match (full name in file name)
-            else if (normName && normName.length >= 3 && normFileName.includes(normName)) {
-              isMatch = true;
-            }
-            // 5. Significant name tokens match (if all >2 char words match)
-            else if (nameTokens.length >= 2 && nameTokens.every(token => normFileName.includes(token))) {
-              isMatch = true;
-            }
-
-            if (isMatch) {
-              donorMatched = true;
-              if (!newUrls.includes(file.url)) {
-                newUrls.push(file.url);
-              }
-              matches.push({
-                donorId: donorId,
-                donorName: donorName,
-                fileName: file.name,
-                fileUrl: file.url
-              });
-
-              // remove from unmatched
-              const unIndex = unmatchedFiles.findIndex(uf => uf.id === file.id);
-              if (unIndex !== -1) {
-                unmatchedFiles.splice(unIndex, 1);
-              }
-            }
-          }
-
-          if (donorMatched && newUrls.length > currentUrls.length) {
-            sheet.getRange(r + 1, certColIndex + 1).setValue(newUrls.join(', '));
-            updatedRowCount++;
-          }
-        }
-      } finally {
-        lock.releaseLock();
       }
 
       return jsonResponse_({
         status: 'success',
         success: true,
-        message: 'Successfully scanned ' + filesList.length + ' file(s). Linked ' + matches.length + ' certificate(s) across ' + updatedRowCount + ' donor(s).',
-        totalFiles: filesList.length,
-        matchedCount: matches.length,
-        updatedDonorsCount: updatedRowCount,
-        matches: matches,
-        unmatchedFiles: unmatchedFiles.map(f => f.name)
+        deletedCount: rowIndicesToDelete.length,
+        message: 'Successfully deleted ' + rowIndicesToDelete.length + ' donor record(s) from Google Sheets.'
       });
-    }
-
-    // Check auth for any mutations
-    const isUpdate = action === 'update' || action === 'edit' || action.startsWith('update_');
-    if (!verifyAuth_(token)) {
-      throw new ValidationError_('Unauthorized: Valid coordinator authentication required.');
     }
 
     // 3. Strict Input Sanitization & Validation (OWASP Injection Protection)
@@ -1268,13 +1291,105 @@ function testSendOtp() {
   return 'Test email successfully sent to ' + testEmail;
 }
 
-function extractDriveFolderId_(urlOrId) {
-  if (!urlOrId) return '';
-  const str = String(urlOrId).trim();
-  if (/^[a-zA-Z0-9_-]{20,}$/.test(str)) {
-    return str;
+/**
+ * Scans a Google Drive folder and its subfolders / files
+ */
+function scanDriveFolder_(folderUrlOrId) {
+  const folderId = extractDriveFolderId_(folderUrlOrId);
+  if (!folderId) {
+    throw new ValidationError_('Could not extract a valid Google Drive folder ID from the provided link or ID.');
   }
-  const match = str.match(/folders\/([a-zA-Z0-9_-]+)/i) || str.match(/[?&]id=([a-zA-Z0-9_-]+)/i);
-  return match ? match[1] : '';
+
+  let rootFolder;
+  try {
+    rootFolder = DriveApp.getFolderById(folderId);
+  } catch (err) {
+    Logger.log('Drive folder access error: ' + err.message);
+    throw new ValidationError_('Unable to access Google Drive folder. Please ensure the folder sharing is set to "Anyone with the link can view" or run authorizeAndTestDrive() in Apps Script.');
+  }
+
+  const subfoldersList = [];
+  const subfolderIterator = rootFolder.getFolders();
+
+  while (subfolderIterator.hasNext()) {
+    const sf = subfolderIterator.next();
+    const sfName = sf.getName();
+    const sfUrl = sf.getUrl();
+    const sfId = sf.getId();
+
+    const filesList = [];
+    const filesIterator = sf.getFiles();
+    while (filesIterator.hasNext()) {
+      const file = filesIterator.next();
+      const fileId = file.getId();
+      const directUrl = 'https://drive.google.com/file/d/' + fileId + '/view?usp=drivesdk';
+      filesList.push({
+        id: fileId,
+        name: file.getName(),
+        url: directUrl || file.getUrl(),
+        mimeType: file.getMimeType(),
+        size: file.getSize()
+      });
+    }
+
+    filesList.sort(function(a, b) { return String(a.name).localeCompare(String(b.name)); });
+
+    subfoldersList.push({
+      id: 'sub-' + sfId,
+      name: sfName,
+      driveUrl: sfUrl,
+      files: filesList,
+      fileCount: filesList.length
+    });
+  }
+
+  subfoldersList.sort(function(a, b) { return String(a.name).localeCompare(String(b.name)); });
+
+  // If no subfolders found, check if root folder directly contains files
+  if (subfoldersList.length === 0) {
+    const directFiles = [];
+    const filesIterator = rootFolder.getFiles();
+    while (filesIterator.hasNext()) {
+      const file = filesIterator.next();
+      const fileId = file.getId();
+      const directUrl = 'https://drive.google.com/file/d/' + fileId + '/view?usp=drivesdk';
+      directFiles.push({
+        id: fileId,
+        name: file.getName(),
+        url: directUrl || file.getUrl(),
+        mimeType: file.getMimeType(),
+        size: file.getSize()
+      });
+    }
+
+    if (directFiles.length > 0) {
+      directFiles.sort(function(a, b) { return String(a.name).localeCompare(String(b.name)); });
+      subfoldersList.push({
+        id: 'sub-' + rootFolder.getId(),
+        name: rootFolder.getName() || 'Camp Blood Drive',
+        driveUrl: rootFolder.getUrl(),
+        files: directFiles,
+        fileCount: directFiles.length
+      });
+    }
+  }
+
+  return {
+    folderName: rootFolder.getName(),
+    folderUrl: rootFolder.getUrl(),
+    subfolders: subfoldersList,
+    totalFiles: subfoldersList.reduce(function(acc, curr) { return acc + curr.fileCount; }, 0)
+  };
+}
+
+function extractDriveFolderId_(input) {
+  if (!input) return '';
+  const str = String(input).trim();
+  const folderMatch = /\/folders\/([a-zA-Z0-9_-]{15,})/.exec(str);
+  if (folderMatch) return folderMatch[1];
+  const idParamMatch = /[?&]id=([a-zA-Z0-9_-]{15,})/.exec(str);
+  if (idParamMatch) return idParamMatch[1];
+  if (/^[a-zA-Z0-9_-]{15,}$/.test(str)) return str;
+  return str;
 }
 

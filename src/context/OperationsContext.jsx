@@ -10,100 +10,53 @@ import {
 
 const OperationsContext = createContext(null);
 
-const STORAGE_CASES_KEY = 'rudhirasena_emergency_cases_v1';
-const STORAGE_CAMPS_KEY = 'rudhirasena_camps_v1';
-const STORAGE_VOL_KEY = 'rudhirasena_voluntary_logs_v1';
+const STORAGE_CASES_KEY = 'rudhirasena_emergency_cases_v2';
+const STORAGE_CAMPS_KEY = 'rudhirasena_camps_v2';
+const STORAGE_VOL_KEY = 'rudhirasena_voluntary_logs_v2';
 
-// Seed demonstration operational records if sheet is fresh
-const SEED_CASES = [
-  {
-    id: 'CASE-001',
-    patientName: 'Karthik Narayanan',
-    hospital: 'Regional Cancer Centre (RCC), Trivandrum',
-    bloodGroup: 'O+',
-    unitsNeeded: 2,
-    urgency: 'Critical',
-    status: 'In Progress',
-    requiredDate: new Date().toISOString().slice(0, 10),
-    contactPerson: '+91 94471 23456 (Dr. Mathew)',
-    notes: 'Platelet requirement for leukemia chemotherapy. Immediate requirement.',
-    assignedDonorId: 'RUD-002',
-    assignedDonorName: 'Niranjan S S',
-    createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
-  },
-  {
-    id: 'CASE-002',
-    patientName: 'Ananya S',
-    hospital: 'Govt. Medical College, Trivandrum',
-    bloodGroup: 'B-',
-    unitsNeeded: 1,
-    urgency: 'Urgent',
-    status: 'Open',
-    requiredDate: new Date().toISOString().slice(0, 10),
-    contactPerson: '+91 98460 98765',
-    notes: 'Emergency bypass surgery requirement. Negative group required.',
-    assignedDonorId: '',
-    assignedDonorName: '',
-    createdAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-  },
-  {
-    id: 'CASE-003',
-    patientName: 'Suresh Kumar',
-    hospital: 'KIMS Health, Trivandrum',
-    bloodGroup: 'A+',
-    unitsNeeded: 2,
-    urgency: 'Standard',
-    status: 'Fulfilled',
-    requiredDate: new Date(Date.now() - 86400000 * 2).toISOString().slice(0, 10),
-    contactPerson: '+91 97450 11223',
-    notes: 'Orthopedic procedure requirement. Completed successfully.',
-    assignedDonorId: 'RUD-001',
-    assignedDonorName: 'Arjun Menon',
-    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-  },
-];
+// No seed/demo data — Operations start empty until real records are created.
 
-const SEED_CAMPS = [
-  {
-    id: 'CAMP-001',
-    name: 'MBCET Annual NSS Mega Blood Drive 2026',
-    date: new Date(Date.now() + 86400000 * 14).toISOString().slice(0, 10),
-    venue: 'MBCET College Auditorium, Pezhakkappilly',
-    partnerBloodBank: 'Govt. Medical College Blood Bank, TVM',
-    targetUnits: 100,
-    collectedUnits: 0,
-    status: 'Upcoming',
-    notes: 'Annual campus donation drive organized by NSS Unit 232 & Rudhirasena.',
-    donorIds: ['RUD-001', 'RUD-002'],
-  },
-  {
-    id: 'CAMP-002',
-    name: 'World Blood Donor Day Special Camp',
-    date: new Date(Date.now() - 86400000 * 45).toISOString().slice(0, 10),
-    venue: 'Seminar Hall 1, Admin Block',
-    partnerBloodBank: 'SCTIMST Blood Bank',
-    targetUnits: 60,
-    collectedUnits: 54,
-    status: 'Completed',
-    notes: '54 units collected for pediatric cardiac surgeries.',
-    donorIds: ['RUD-001'],
-  },
-];
+function getNextId(list = [], prefix = 'ITEM') {
+  let maxNum = 0;
+  if (Array.isArray(list)) {
+    list.forEach((item) => {
+      const match = new RegExp(`^${prefix}-(\\d+)$`, 'i').exec(String(item?.id || item?.ID || ''));
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxNum) maxNum = num;
+      }
+    });
+  }
+  return `${prefix}-${String(maxNum + 1).padStart(3, '0')}`;
+}
 
-const SEED_VOL_LOGS = [
-  {
-    id: 'VOL-001',
-    donorId: 'RUD-002',
-    donorName: 'Niranjan S S',
-    bloodGroup: 'O+',
-    donationDate: '2026-03-31',
-    venue: 'Regional Cancer Centre (RCC)',
-    donationType: 'Whole Blood',
-    units: 1,
-    certificateUrl: '',
-    notes: 'Voluntary walk-in donation for emergency ward.',
-  },
-];
+function deduplicateListWithPrefix(list = [], prefix = 'ITEM') {
+  if (!Array.isArray(list)) return [];
+  const seen = new Set();
+  let maxNum = 0;
+
+  list.forEach((item) => {
+    const match = new RegExp(`^${prefix}-(\\d+)$`, 'i').exec(String(item?.id || item?.ID || ''));
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num) && num > maxNum) maxNum = num;
+    }
+  });
+
+  return list.map((item) => {
+    if (!item || typeof item !== 'object') return item;
+    let currentId = item.id || item.ID;
+    if (!currentId || seen.has(currentId)) {
+      maxNum++;
+      currentId = `${prefix}-${String(maxNum).padStart(3, '0')}`;
+    }
+    seen.add(currentId);
+    return {
+      ...item,
+      id: currentId,
+    };
+  });
+}
 
 export function OperationsProvider({ children }) {
   const { authToken } = useAuth();
@@ -112,27 +65,27 @@ export function OperationsProvider({ children }) {
   const [cases, setCases] = useState(() => {
     try {
       const cached = localStorage.getItem(STORAGE_CASES_KEY);
-      return cached ? JSON.parse(cached) : SEED_CASES;
+      return cached ? deduplicateListWithPrefix(JSON.parse(cached), 'CASE') : [];
     } catch {
-      return SEED_CASES;
+      return [];
     }
   });
 
   const [camps, setCamps] = useState(() => {
     try {
       const cached = localStorage.getItem(STORAGE_CAMPS_KEY);
-      return cached ? JSON.parse(cached) : SEED_CAMPS;
+      return cached ? deduplicateListWithPrefix(JSON.parse(cached), 'CAMP') : [];
     } catch {
-      return SEED_CAMPS;
+      return [];
     }
   });
 
   const [voluntaryLogs, setVoluntaryLogs] = useState(() => {
     try {
       const cached = localStorage.getItem(STORAGE_VOL_KEY);
-      return cached ? JSON.parse(cached) : SEED_VOL_LOGS;
+      return cached ? deduplicateListWithPrefix(JSON.parse(cached), 'VOL') : [];
     } catch {
-      return SEED_VOL_LOGS;
+      return [];
     }
   });
 
@@ -177,16 +130,24 @@ export function OperationsProvider({ children }) {
    * Create an Emergency Case
    */
   const addEmergencyCase = useCallback(async (caseData) => {
-    const newCase = normalizeEmergencyCase({
-      ...caseData,
-      id: `CASE-${String(cases.length + 1).padStart(3, '0')}`,
-      createdAt: new Date().toISOString(),
+    let createdCase = null;
+    setCases((prev) => {
+      const targetId = caseData.id && !prev.some((c) => c.id === caseData.id)
+        ? caseData.id
+        : getNextId(prev, 'CASE');
+      createdCase = normalizeEmergencyCase({
+        ...caseData,
+        id: targetId,
+        createdAt: new Date().toISOString(),
+      });
+      return [createdCase, ...prev];
     });
 
-    setCases((prev) => [newCase, ...prev]);
-    await sendBackendSync('create_case', newCase);
-    return newCase;
-  }, [cases.length, sendBackendSync]);
+    if (createdCase) {
+      await sendBackendSync('create_case', createdCase);
+    }
+    return createdCase;
+  }, [sendBackendSync]);
 
   /**
    * Update an Emergency Case
@@ -252,48 +213,91 @@ export function OperationsProvider({ children }) {
    * Log a Voluntary Blood Donation
    */
   const addVoluntaryDonation = useCallback(async (donationData) => {
-    const newLog = normalizeVoluntaryDonation({
-      ...donationData,
-      id: `VOL-${String(voluntaryLogs.length + 1).padStart(3, '0')}`,
+    let createdLog = null;
+    setVoluntaryLogs((prev) => {
+      const targetId = donationData.id && !prev.some((l) => l.id === donationData.id)
+        ? donationData.id
+        : getNextId(prev, 'VOL');
+      createdLog = normalizeVoluntaryDonation({
+        ...donationData,
+        id: targetId,
+      });
+      return [createdLog, ...prev];
     });
 
-    setVoluntaryLogs((prev) => [newLog, ...prev]);
-
     // Auto-update donor's Last Donated Date and Venue in the main database
-    if (newLog.donorId) {
+    if (createdLog && createdLog.donorId) {
       try {
-        await updateDonor(newLog.donorId, {
-          'Last Donated Date': newLog.donationDate,
-          Last_Donated_Date: newLog.donationDate,
-          'Last Donation Venue': newLog.venue,
-          Last_Donation_Venue: newLog.venue,
-          'Last Donation Type': newLog.donationType,
-          Last_Donation_Type: newLog.donationType,
-          'Certificate URL': newLog.certificateUrl || '',
-          Certificate_URL: newLog.certificateUrl || '',
+        await updateDonor(createdLog.donorId, {
+          'Last Donated Date': createdLog.donationDate,
+          Last_Donated_Date: createdLog.donationDate,
+          'Last Donation Venue': createdLog.venue,
+          Last_Donation_Venue: createdLog.venue,
+          'Last Donation Type': createdLog.donationType,
+          Last_Donation_Type: createdLog.donationType,
+          'Certificate URL': createdLog.certificateUrl || '',
+          Certificate_URL: createdLog.certificateUrl || '',
         });
       } catch (err) {
         console.warn('Could not update donor for voluntary log:', err.message);
       }
     }
 
-    await sendBackendSync('log_donation', newLog);
-    return newLog;
-  }, [voluntaryLogs.length, updateDonor, sendBackendSync]);
+    if (createdLog) {
+      await sendBackendSync('log_donation', createdLog);
+    }
+    return createdLog;
+  }, [updateDonor, sendBackendSync]);
 
   /**
    * Create a Blood Donation Camp
    */
   const addCamp = useCallback(async (campData) => {
-    const newCamp = normalizeCamp({
-      ...campData,
-      id: `CAMP-${String(camps.length + 1).padStart(3, '0')}`,
+    let createdCamp = null;
+    setCamps((prev) => {
+      const targetId = campData.id && !prev.some((c) => c.id === campData.id)
+        ? campData.id
+        : getNextId(prev, 'CAMP');
+      createdCamp = normalizeCamp({
+        ...campData,
+        id: targetId,
+      });
+      return [createdCamp, ...prev];
     });
 
-    setCamps((prev) => [newCamp, ...prev]);
-    await sendBackendSync('create_camp', newCamp);
-    return newCamp;
-  }, [camps.length, sendBackendSync]);
+    if (createdCamp) {
+      await sendBackendSync('create_camp', createdCamp);
+    }
+    return createdCamp;
+  }, [sendBackendSync]);
+
+  /**
+   * Create Multiple Blood Donation Camps in One Batch (e.g. from Auto-Organize)
+   */
+  const addMultipleCamps = useCallback(async (campsList) => {
+    if (!Array.isArray(campsList) || campsList.length === 0) return [];
+    const created = [];
+    setCamps((prev) => {
+      let currentList = [...prev];
+      campsList.forEach((campData) => {
+        const targetId = campData.id && !currentList.some((c) => c.id === campData.id)
+          ? campData.id
+          : getNextId(currentList, 'CAMP');
+        const norm = normalizeCamp({
+          ...campData,
+          id: targetId,
+        });
+        created.push(norm);
+        currentList = [norm, ...currentList];
+      });
+      return currentList;
+    });
+
+    for (const c of created) {
+      await sendBackendSync('create_camp', c);
+    }
+    return created;
+  }, [sendBackendSync]);
 
   /**
    * Update a Camp
@@ -426,6 +430,7 @@ export function OperationsProvider({ children }) {
     updateVoluntaryDonation,
     deleteVoluntaryDonation,
     addCamp,
+    addMultipleCamps,
     updateCamp,
     deleteCamp,
     addDonorToCampRoster,

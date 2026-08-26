@@ -3,7 +3,10 @@ import {
   Calendar,
   CheckCircle2,
   Edit3,
+  ExternalLink,
+  Eye,
   FileSpreadsheet,
+  Link2,
   MapPin,
   Plus,
   Search,
@@ -17,6 +20,9 @@ import {
 import Modal from '../Modal';
 import EditCampModal from './EditCampModal';
 import ImportCampRosterModal from './ImportCampRosterModal';
+import LinkDriveCertificatesModal from './LinkDriveCertificatesModal';
+import DonorProfileModal from '../DonorProfileModal';
+import EditDonorModal from '../EditDonorModal';
 import { useOperations } from '../../context/OperationsContext';
 import { useDonors } from '../../context/DonorContext';
 import { formatShortDate } from '../../utils/donor';
@@ -33,6 +39,13 @@ export default function CampDetailsModal({ open, camp, onClose, onRegisterNewDon
   const [isAddingDonor, setIsAddingDonor] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isDriveLinkOpen, setIsDriveLinkOpen] = useState(false);
+  const [bulkRemoveMode, setBulkRemoveMode] = useState(false);
+  const [selectedDonors, setSelectedDonors] = useState([]);
+  
+  // Direct donor inspection & editing states in camp roster
+  const [viewingDonor, setViewingDonor] = useState(null);
+  const [editingDonor, setEditingDonor] = useState(null);
 
   const participatingDonors = useMemo(() => {
     if (!activeCamp || !activeCamp.donorIds) return [];
@@ -70,6 +83,20 @@ export default function CampDetailsModal({ open, camp, onClose, onRegisterNewDon
     await removeDonorFromCampRoster(activeCamp.id, donorId);
   };
 
+  const toggleSelectDonor = (id) => {
+    setSelectedDonors((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkRemove = async () => {
+    for (const id of selectedDonors) {
+      await removeDonorFromCampRoster(activeCamp.id, id);
+    }
+    setSelectedDonors([]);
+    setBulkRemoveMode(false);
+  };
+
   return (
     <Modal
       open={open}
@@ -105,6 +132,17 @@ export default function CampDetailsModal({ open, camp, onClose, onRegisterNewDon
                   <Edit3 className="h-3 w-3" />
                   Edit Camp
                 </button>
+                {activeCamp.driveFolderUrl && (
+                  <a
+                    href={activeCamp.driveFolderUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Drive Folder
+                  </a>
+                )}
               </div>
               <p className="flex items-center gap-1.5 text-xs text-slate-600">
                 <MapPin className="h-3.5 w-3.5 text-red-600 shrink-0" />
@@ -155,6 +193,25 @@ export default function CampDetailsModal({ open, camp, onClose, onRegisterNewDon
               >
                 <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-700" />
                 Import Excel / Form
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsDriveLinkOpen(true)}
+                className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50/70 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100 shadow-xs transition-colors"
+              >
+                <Link2 className="h-3.5 w-3.5" />
+                Link Drive Certificates
+              </button>
+              <button
+                type="button"
+                onClick={() => { setBulkRemoveMode((b) => !b); setSelectedDonors([]); }}
+                className={`cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-bold transition-colors ${
+                  bulkRemoveMode
+                    ? 'border-red-300 bg-red-50 text-red-700 hover:bg-red-100'
+                    : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                {bulkRemoveMode ? 'Cancel Bulk Remove' : 'Bulk Remove'}
               </button>
               <button
                 type="button"
@@ -238,59 +295,138 @@ export default function CampDetailsModal({ open, camp, onClose, onRegisterNewDon
                 No donors logged on this camp roster yet.
               </div>
             ) : (
-              <table className="w-full text-left text-xs">
-                <thead className="sticky top-0 border-b border-slate-100 bg-slate-50/90 font-bold text-slate-600 backdrop-blur-xs">
-                  <tr>
-                    <th className="px-3.5 py-2.5">Donor</th>
-                    <th className="px-3.5 py-2.5">Group</th>
-                    <th className="px-3.5 py-2.5">Department & Year</th>
-                    <th className="px-3.5 py-2.5 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {participatingDonors.map((donor, idx) => {
-                    const donorId = donor.ID || donor.Donor_ID;
-                    return (
-                      <tr key={donorId || idx} className="hover:bg-slate-50/50">
-                        <td className="px-3.5 py-2">
-                          <p className="font-bold text-slate-900">
-                            {donor.Name || donor.Full_Name}
-                          </p>
-                          <p className="text-[10px] text-slate-400">
-                            {donorId}
-                          </p>
-                        </td>
-                        <td className="px-3.5 py-2">
-                          <span className="rounded bg-red-50 px-1.5 py-0.5 font-bold text-red-700">
-                            {donor['Blood Group']}
-                          </span>
-                        </td>
-                        <td className="px-3.5 py-2 text-slate-600">
-                          {donor.Department}
-                          {donor.Year ? ` · ${donor.Year}` : ''}
-                        </td>
-                        <td className="px-3.5 py-2 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
-                              <CheckCircle2 className="h-3 w-3" /> 1 Unit
+              <>
+                {bulkRemoveMode && selectedDonors.length > 0 && (
+                  <div className="flex items-center justify-between border-b border-red-100 bg-red-50/80 px-3.5 py-2">
+                    <span className="text-xs font-bold text-red-700">{selectedDonors.length} donor(s) selected</span>
+                    <button
+                      type="button"
+                      onClick={handleBulkRemove}
+                      className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-red-700 px-3 py-1 text-[11px] font-bold text-white hover:bg-red-800"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Remove Selected from Roster
+                    </button>
+                  </div>
+                )}
+                <table className="w-full text-left text-xs">
+                  <thead className="sticky top-0 border-b border-slate-100 bg-slate-50/90 font-bold text-slate-600 backdrop-blur-xs">
+                    <tr>
+                      {bulkRemoveMode && (
+                        <th className="px-3.5 py-2.5 w-8">
+                          <input
+                            type="checkbox"
+                            className="cursor-pointer"
+                            checked={selectedDonors.length === participatingDonors.length && participatingDonors.length > 0}
+                            onChange={(e) =>
+                              setSelectedDonors(
+                                e.target.checked ? participatingDonors.map((d) => d.ID || d.Donor_ID) : []
+                              )
+                            }
+                          />
+                        </th>
+                      )}
+                      <th className="px-3.5 py-2.5">Donor</th>
+                      <th className="px-3.5 py-2.5">Group</th>
+                      <th className="px-3.5 py-2.5">Department & Year</th>
+                      <th className="px-3.5 py-2.5 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {participatingDonors.map((donor, idx) => {
+                      const donorId = donor.ID || donor.Donor_ID;
+                      const isSelected = selectedDonors.includes(donorId);
+                      return (
+                        <tr key={donorId || idx} className={`hover:bg-slate-50/70 transition-colors ${isSelected ? 'bg-red-50/60' : ''}`}>
+                          {bulkRemoveMode && (
+                            <td className="px-3.5 py-2 w-8">
+                              <input
+                                type="checkbox"
+                                className="cursor-pointer rounded text-red-600"
+                                checked={isSelected}
+                                onChange={() => toggleSelectDonor(donorId)}
+                              />
+                            </td>
+                          )}
+                          <td className="px-3.5 py-2.5">
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setViewingDonor(donor)}
+                                className="font-bold text-slate-900 hover:text-red-700 hover:underline cursor-pointer text-left transition-colors"
+                                title="Click to view full donor profile"
+                              >
+                                {donor.Name || donor.Full_Name}
+                              </button>
+                              {donor['Certificate URL'] && (
+                                <a
+                                  href={donor['Certificate URL']}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-purple-600 hover:text-purple-800 p-0.5"
+                                  title="View Certificate in Drive"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-mono">{donorId}</p>
+                          </td>
+                          <td className="px-3.5 py-2.5">
+                            <span className="rounded bg-red-50 px-1.5 py-0.5 font-bold text-red-700 text-[10px] border border-red-100">
+                              {donor['Blood Group']}
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveDonor(donorId)}
-                              title="Remove from Camp Roster"
-                              className="cursor-pointer rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          </td>
+                          <td className="px-3.5 py-2.5 text-slate-600 text-[11px]">
+                            {donor.Department}
+                            {donor.Year ? ` · ${donor.Year}` : ''}
+                          </td>
+                          <td className="px-3.5 py-2.5 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 mr-1">
+                                <CheckCircle2 className="h-3 w-3" /> 1 Unit
+                              </span>
+
+                              {/* View Profile Button */}
+                              <button
+                                type="button"
+                                onClick={() => setViewingDonor(donor)}
+                                title="View Full Profile"
+                                className="cursor-pointer rounded-lg border border-slate-200 bg-white p-1 text-slate-600 hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 shadow-2xs transition-colors"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </button>
+
+                              {/* Edit Donor Details Button */}
+                              <button
+                                type="button"
+                                onClick={() => setEditingDonor(donor)}
+                                title="Edit Donor Details"
+                                className="cursor-pointer rounded-lg border border-slate-200 bg-white p-1 text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700 shadow-2xs transition-colors"
+                              >
+                                <Edit3 className="h-3.5 w-3.5" />
+                              </button>
+
+                              {/* Remove from Camp Roster */}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveDonor(donorId)}
+                                title="Remove from Camp Roster"
+                                className="cursor-pointer rounded-lg p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </>
             )}
           </div>
+
         </div>
       </div>
 
@@ -321,6 +457,40 @@ export default function CampDetailsModal({ open, camp, onClose, onRegisterNewDon
           open={isImportOpen}
           camp={camp}
           onClose={() => setIsImportOpen(false)}
+        />
+      )}
+
+      {/* Link Drive Certificates Modal */}
+      {isDriveLinkOpen && (
+        <LinkDriveCertificatesModal
+          open={isDriveLinkOpen}
+          camp={activeCamp}
+          onClose={() => setIsDriveLinkOpen(false)}
+        />
+      )}
+
+      {/* View Donor Profile Modal */}
+      {viewingDonor && (
+        <DonorProfileModal
+          open={Boolean(viewingDonor)}
+          donor={viewingDonor}
+          onClose={() => setViewingDonor(null)}
+          onEdit={(d) => {
+            setViewingDonor(null);
+            setEditingDonor(d);
+          }}
+        />
+      )}
+
+      {/* Edit Donor Details Modal */}
+      {editingDonor && (
+        <EditDonorModal
+          open={Boolean(editingDonor)}
+          donor={editingDonor}
+          onClose={() => setEditingDonor(null)}
+          onUpdated={() => {
+            // Updated automatically via DonorContext
+          }}
         />
       )}
     </Modal>
